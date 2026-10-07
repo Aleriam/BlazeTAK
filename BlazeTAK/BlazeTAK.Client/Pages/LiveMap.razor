@@ -28,6 +28,18 @@
                 <span class="badge badge-theme"><i class="bi bi-arrow-repeat"></i> Connecting...</span>
             }
             <span class="badge badge-theme font-monospace ms-1">@(string.IsNullOrEmpty(currentGroupName) ? "Global Group" : currentGroupName)</span>
+            @if (userLocations.Count > 0)
+            {
+                <span class="badge bg-info text-dark ms-1" title="Unit Members Sharing Location"><i class="bi bi-people-fill me-1"></i>@userLocations.Count Unit</span>
+            }
+            @if (liveUnitMarkers.Count > 0)
+            {
+                <span class="badge bg-primary ms-1" title="Live Unit Markers"><i class="bi bi-shield-shaded me-1"></i>@liveUnitMarkers.Count HQ/Squad</span>
+            }
+            @if (isGpsTracking)
+            {
+                <span class="badge bg-success ms-1" title="GPS Tracking Active"><i class="bi bi-compass-fill me-1"></i>GPS Active</span>
+            }
         </label>
     </div>
 
@@ -111,12 +123,94 @@
                             <span><i class="bi bi-pin-map-fill me-2"></i>Add Marker</span>
                             <i class="bi @(isMarkerSelectorOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
                         </button>
+
+                        <button type="button" class="btn btn-sm @(isGpsPanelOpen ? "btn-success" : "btn-outline-success") text-start d-flex justify-content-between align-items-center" @onclick="ToggleGpsPanel">
+                            <span><i class="bi bi-compass-fill me-2"></i>Live Geolocation</span>
+                            <i class="bi @(isGpsPanelOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                        </button>
                         
                         <button type="button" class="btn btn-sm @(isSettingsOpen ? "btn-secondary" : "btn-outline-secondary") text-start d-flex justify-content-between align-items-center" @onclick="ToggleSettings">
                             <span><i class="bi bi-gear-fill me-2"></i>Settings</span>
                             <i class="bi @(isSettingsOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
                         </button>
                     </div>
+
+                    <!-- Geolocation Tracking Panel -->
+                    @if (isGpsPanelOpen)
+                    {
+                        <div class="p-2 mb-2 border rounded livemap-panel small">
+                            <h6 class="border-bottom pb-1 mb-2 fw-bold text-success"><i class="bi bi-geo-alt-fill me-1"></i>Geolocation Sharing</h6>
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span>GPS Tracking:</span>
+                                    <button type="button" class="btn btn-sm @(isGpsTracking ? "btn-danger" : "btn-success") py-1 px-2" @onclick="ToggleGeolocationTracking">
+                                        <i class="bi @(isGpsTracking ? "bi-stop-fill" : "bi-play-fill") me-1"></i>@(isGpsTracking ? "Stop GPS" : "Start GPS")
+                                    </button>
+                                </div>
+                                @if (myLocation != null)
+                                {
+                                    <button type="button" class="btn btn-sm btn-outline-primary w-100 mb-2 py-1" @onclick="CenterOnMyLocation">
+                                        <i class="bi bi-crosshair me-1"></i>Center on My Position
+                                    </button>
+                                }
+                            </div>
+                            
+                            @if (!string.IsNullOrEmpty(gpsStatusMessage))
+                            {
+                                <div class="p-1 mb-2 bg-dark rounded text-light font-monospace small" style="font-size: 0.72rem;">
+                                    @gpsStatusMessage
+                                </div>
+                            }
+
+                            @if (myLocation != null)
+                            {
+                                <div class="bg-light p-2 rounded mb-2 border text-dark font-monospace" style="font-size: 0.75rem;">
+                                    <div><strong>Lat:</strong> @myLocation.Latitude.ToString("F5")</div>
+                                    <div><strong>Lng:</strong> @myLocation.Longitude.ToString("F5")</div>
+                                    @if (myLocation.Heading.HasValue)
+                                    {
+                                        <div><strong>Heading:</strong> @(Math.Round(myLocation.Heading.Value))&deg;</div>
+                                    }
+                                    @if (myLocation.Speed.HasValue)
+                                    {
+                                        <div><strong>Speed:</strong> @((myLocation.Speed.Value * 3.6).ToString("F1")) km/h</div>
+                                    }
+                                    @if (myLocation.Accuracy.HasValue)
+                                    {
+                                        <div><strong>Accuracy:</strong> &plusmn;@Math.Round(myLocation.Accuracy.Value)m</div>
+                                    }
+                                </div>
+                            }
+
+                            <!-- Simulation / Step Movement Tools for Verification -->
+                            <div class="border-top pt-2 mt-2">
+                                <div class="fw-bold mb-1" style="font-size: 0.75rem;">Move Simulator (Test &gt;10m / &gt;30m):</div>
+                                <div class="d-flex justify-content-center gap-1 mb-1">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @onclick="() => SimulateMove(15, 0)" title="Move 15m North (triggers >10m update)">
+                                        <i class="bi bi-arrow-up"></i> +15m N
+                                    </button>
+                                </div>
+                                <div class="d-flex justify-content-center gap-1 mb-1">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @onclick="() => SimulateMove(0, -15)" title="Move 15m West">
+                                        <i class="bi bi-arrow-left"></i> +15m W
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @onclick="() => SimulateMove(0, 15)" title="Move 15m East">
+                                        +15m E <i class="bi bi-arrow-right"></i>
+                                    </button>
+                                </div>
+                                <div class="d-flex justify-content-center gap-1 mb-1">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @onclick="() => SimulateMove(-15, 0)" title="Move 15m South">
+                                        <i class="bi bi-arrow-down"></i> +15m S
+                                    </button>
+                                </div>
+                                <div class="d-grid mt-1">
+                                    <button type="button" class="btn btn-sm btn-outline-warning py-0" @onclick="() => SimulateMove(35, 0)" title="Move 35m North (triggers >30m unit threshold / radius exit)">
+                                        <i class="bi bi-lightning-charge"></i> Move +35m (Unit Update)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
 
                     <!-- Settings Panel (Extensibility placeholder) -->
                     @if (isSettingsOpen)
@@ -350,7 +444,13 @@
     private Dictionary<Guid, MarkerDto> markers = new();
     private string currentGroupName = null;
     
-
+    // Geolocation & Unit Live Tracking State
+    private Dictionary<Guid, UserLocationDto> userLocations = new();
+    private List<LiveUnitMarkerDto> liveUnitMarkers = new();
+    private UserLocationDto? myLocation;
+    private bool isGpsTracking = false;
+    private bool isGpsPanelOpen = false;
+    private string? gpsStatusMessage;
     
     protected override async Task OnInitializedAsync()
     {
@@ -426,11 +526,40 @@
                 await InvokeAsync(StateHasChanged);
             });
 
+            hubConnection.On<UserLocationDto>("UserLocationUpdated", async (userLoc) =>
+            {
+                userLocations[userLoc.UserId] = userLoc;
+                bool isSelf = (myLocation != null && myLocation.UserId == userLoc.UserId);
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateUserLocation", mapId, userLoc, isSelf);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<List<LiveUnitMarkerDto>>("UnitMarkersUpdated", async (unitMarkers) =>
+            {
+                liveUnitMarkers = unitMarkers ?? new List<LiveUnitMarkerDto>();
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.loadLiveUnitMarkers", mapId, liveUnitMarkers);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<Guid>("UserLocationRemoved", async (userId) =>
+            {
+                userLocations.Remove(userId);
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.removeUserLocation", mapId, userId);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
             
             await hubConnection.StartAsync();
             await hubConnection.SendAsync("JoinGroup");
             await FetchGroupNameAsync();
-            
             
             var initialMarkers = await hubConnection.InvokeAsync<List<MarkerDto>>("GetMarkers");
             if (initialMarkers != null)
@@ -439,6 +568,28 @@
                 {
                     markers[m.Id] = m;
                 }
+            }
+
+            try
+            {
+                var initialUserLocations = await hubConnection.InvokeAsync<List<UserLocationDto>>("GetUnitUserLocations");
+                if (initialUserLocations != null)
+                {
+                    foreach (var loc in initialUserLocations)
+                    {
+                        userLocations[loc.UserId] = loc;
+                    }
+                }
+
+                var initialUnitMarkers = await hubConnection.InvokeAsync<List<LiveUnitMarkerDto>>("GetLiveUnitMarkers");
+                if (initialUnitMarkers != null)
+                {
+                    liveUnitMarkers = initialUnitMarkers;
+                }
+            }
+            catch (Exception locEx)
+            {
+                Console.WriteLine($"Error fetching initial live locations: {locEx.Message}");
             }
             
         }
@@ -463,6 +614,18 @@
             if (markers.Count > 0)
             {
                 await JSRuntime.InvokeVoidAsync("liveMap.loadMarkers", mapId, markers.Values.ToList());
+            }
+
+            // Load unit user locations
+            if (userLocations.Count > 0)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.loadUserLocations", mapId, userLocations.Values.ToList(), myLocation?.UserId.ToString());
+            }
+
+            // Load live unit markers
+            if (liveUnitMarkers.Count > 0)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.loadLiveUnitMarkers", mapId, liveUnitMarkers);
             }
         }
     }
@@ -498,6 +661,17 @@
         isMarkerSelectorOpen = !isMarkerSelectorOpen;
         if (isMarkerSelectorOpen)
         {
+            isGpsPanelOpen = false;
+            isSettingsOpen = false;
+        }
+    }
+
+    private void ToggleGpsPanel()
+    {
+        isGpsPanelOpen = !isGpsPanelOpen;
+        if (isGpsPanelOpen)
+        {
+            isMarkerSelectorOpen = false;
             isSettingsOpen = false;
         }
     }
@@ -508,7 +682,130 @@
         if (isSettingsOpen)
         {
             isMarkerSelectorOpen = false;
+            isGpsPanelOpen = false;
         }
+    }
+
+    private async Task ToggleGeolocationTracking()
+    {
+        if (isGpsTracking)
+        {
+            await StopGeolocationAsync();
+        }
+        else
+        {
+            await StartGeolocationAsync();
+        }
+    }
+
+    private async Task StartGeolocationAsync()
+    {
+        if (!mapInitialized) return;
+        isGpsTracking = true;
+        gpsStatusMessage = "Starting GPS tracking...";
+        try
+        {
+            var started = await JSRuntime.InvokeAsync<bool>("liveMap.startGeolocationTracking", mapId, dotNetRef);
+            if (!started)
+            {
+                isGpsTracking = false;
+                gpsStatusMessage = "Geolocation not supported or denied by browser.";
+            }
+            else
+            {
+                gpsStatusMessage = "GPS active. Sharing position (>10m movement).";
+            }
+        }
+        catch (Exception ex)
+        {
+            isGpsTracking = false;
+            gpsStatusMessage = $"GPS start failed: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task StopGeolocationAsync()
+    {
+        isGpsTracking = false;
+        gpsStatusMessage = "GPS tracking stopped.";
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("liveMap.stopGeolocationTracking", mapId);
+        }
+        catch
+        {
+            // Ignore
+        }
+        StateHasChanged();
+    }
+
+    private async Task CenterOnMyLocation()
+    {
+        if (myLocation != null && mapInitialized)
+        {
+            await JSRuntime.InvokeVoidAsync("liveMap.centerMap", mapId, myLocation.Latitude, myLocation.Longitude, 15);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnLocationChanged(double lat, double lng, double? heading, double? speed, double? accuracy)
+    {
+        try
+        {
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                var updatedLoc = await hubConnection.InvokeAsync<UserLocationDto?>("UpdateUserLocation", new LocationUpdateDto
+                {
+                    Latitude = lat,
+                    Longitude = lng,
+                    Heading = heading,
+                    Speed = speed,
+                    Accuracy = accuracy
+                });
+
+                if (updatedLoc != null)
+                {
+                    myLocation = updatedLoc;
+                    userLocations[updatedLoc.UserId] = updatedLoc;
+                    if (mapInitialized)
+                    {
+                        await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateUserLocation", mapId, updatedLoc, true);
+                    }
+                    gpsStatusMessage = $"Position updated: {lat:F5}, {lng:F5}";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            gpsStatusMessage = $"Location sync error: {ex.Message}";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnGeolocationError(string error)
+    {
+        gpsStatusMessage = $"GPS Error: {error}";
+        StateHasChanged();
+    }
+
+    private async Task SimulateMove(double deltaLatMeters, double deltaLngMeters)
+    {
+        double baseLat = myLocation?.Latitude ?? 47.5;
+        double baseLng = myLocation?.Longitude ?? 14.5;
+
+        // 1 deg lat is ~ 111,320m
+        // 1 deg lng is ~ 111,320m * cos(lat)
+        double deltaLat = deltaLatMeters / 111320.0;
+        double deltaLng = deltaLngMeters / (111320.0 * Math.Cos(baseLat * Math.PI / 180.0));
+
+        double newLat = baseLat + deltaLat;
+        double newLng = baseLng + deltaLng;
+        double heading = Math.Atan2(deltaLngMeters, deltaLatMeters) * 180.0 / Math.PI;
+        if (heading < 0) heading += 360.0;
+
+        await OnLocationChanged(newLat, newLng, heading, 1.5, 5.0);
     }
 
     private void ToggleCategory(string categoryId)

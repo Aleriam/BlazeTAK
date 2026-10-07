@@ -5,6 +5,7 @@ using BlazeTAK.Client.Pages;
 using BlazeTAK.Components;
 using BlazeTAK.Components.Account;
 using BlazeTAK.Data;
+using BlazeTAK.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +43,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddSingleton<IUserLocationService, UserLocationService>();
 
 var app = builder.Build();
 
