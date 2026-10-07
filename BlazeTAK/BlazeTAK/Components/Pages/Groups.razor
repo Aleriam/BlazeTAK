@@ -1,0 +1,950 @@
+@page "/groups"
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using BlazeTAK.Data
+@using BlazeTAK.Data.Models
+
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Groups Management</PageTitle>
+
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i class="bi bi-diagram-3"></i> Group & Unit Management</h2>
+        @if (currentUser != null)
+        {
+            <div>
+                <span class="badge bg-secondary me-2">CallSign: @(string.IsNullOrEmpty(currentUser.CallSign) ? "None" : $"{currentUser.CallSign}-{currentUser.CallSignNumber}")</span>
+                @if (currentUser.EditGroupData)
+                {
+                    <span class="badge bg-primary"><i class="bi bi-shield-lock-fill"></i> Manager (EditGroupData: Enabled)</span>
+                }
+                else
+                {
+                    <span class="badge bg-info text-dark">Member</span>
+                }
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle-fill me-2"></i> @successMessage
+            <button type="button" class="btn-close" @onclick="() => successMessage = null" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> @errorMessage
+            <button type="button" class="btn-close" @onclick="() => errorMessage = null" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading data...</p>
+        </div>
+    }
+    else if (currentUser == null)
+    {
+        <div class="alert alert-warning">
+            User profile not found.
+        </div>
+    }
+    else
+    {
+        @* CallSign and Profile Settings Card (Available to users) *@
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person-badge"></i> My Profile & Callsign Settings</h5>
+                @if (currentUser.Unit != null)
+                {
+                    <span class="badge bg-success">
+                        Unit: @currentUser.Unit.Name @(currentUser.Unit.Group != null ? $"({currentUser.Unit.Group.Name})" : (currentUser.Group != null ? $"({currentUser.Group.Name})" : ""))
+                    </span>
+                }
+                else if (currentUser.Group != null)
+                {
+                    <span class="badge bg-success">
+                        Group: @currentUser.Group.Name (No Unit Assigned)
+                    </span>
+                }
+                else if (currentUser.RequestedGroup != null)
+                {
+                    <span class="badge bg-warning text-dark">
+                        Pending request for group: @currentUser.RequestedGroup.Name
+                    </span>
+                }
+                else
+                {
+                    <span class="badge bg-secondary">No Group Assigned</span>
+                }
+            </div>
+            <div class="card-body">
+                <EditForm Model="callSignModel" OnValidSubmit="SaveCallSignSettingsAsync">
+                    <DataAnnotationsValidator />
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">CallSign</label>
+                            <InputText class="form-control" @bind-Value="callSignModel.CallSign" placeholder="e.g. ALPHA, VIPER" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">CallSign Number</label>
+                            <InputNumber class="form-control" @bind-Value="callSignModel.CallSignNumber" min="0" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Display Name</label>
+                            <InputText class="form-control" @bind-Value="callSignModel.Name" placeholder="Your name" />
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-save"></i> Save Callsign
+                            </button>
+                        </div>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+
+        @if (currentUser.EditGroupData)
+        {
+            @* MANAGER VIEW: CAN CREATE GROUPS, UNITS, ASSIGN USERS, ACCEPT JOIN REQUESTS *@
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Create New Group</h5>
+                        </div>
+                        <div class="card-body">
+                            <EditForm Model="newGroupModel" OnValidSubmit="CreateGroupAsync">
+                                <DataAnnotationsValidator />
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Group Name *</label>
+                                        <InputText class="form-control" @bind-Value="newGroupModel.Name" placeholder="e.g. 1st Battalion" required />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">CallSign</label>
+                                        <InputText class="form-control" @bind-Value="newGroupModel.CallSign" placeholder="e.g. BATTALION" />
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">CallSign Number</label>
+                                        <InputNumber class="form-control" @bind-Value="newGroupModel.CallSignNumber" min="0" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="submit" class="btn btn-success w-100">
+                                            <i class="bi bi-folder-plus"></i> Create Group
+                                        </button>
+                                    </div>
+                                </div>
+                            </EditForm>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* PENDING JOIN REQUESTS ACROSS GROUPS *@
+            @if (pendingUsers.Any())
+            {
+                <div class="card mb-4 border-warning shadow-sm">
+                    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-person-plus-fill"></i> Users Opted to Join Groups (@pendingUsers.Count)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>User Name</th>
+                                        <th>CallSign</th>
+                                        <th>Requested Group</th>
+                                        <th>Assign to Unit</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var user in pendingUsers)
+                                    {
+                                        var targetGroup = groups.FirstOrDefault(g => g.ID == user.RequestedGroupId);
+                                        var groupUnits = targetGroup?.Units ?? new List<Unit>();
+                                        <tr>
+                                            <td>
+                                                <strong>@(string.IsNullOrEmpty(user.Name) ? user.ApplicationUser?.UserName : user.Name)</strong>
+                                                <div class="small text-muted">@user.ApplicationUser?.Email</div>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary">@(string.IsNullOrEmpty(user.CallSign) ? "-" : $"{user.CallSign}-{user.CallSignNumber}")</span>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-primary">@(targetGroup?.Name ?? "Unknown Group")</span>
+                                            </td>
+                                            <td style="min-width: 200px;">
+                                                @if (groupUnits.Any())
+                                                {
+                                                    <select class="form-select form-select-sm" @bind="selectedAcceptUnitIds[user.ID]">
+                                                        <option value="">-- Select Unit (or Accept to Group) --</option>
+                                                        @foreach (var u in groupUnits)
+                                                        {
+                                                            <option value="@u.ID">@u.Name (@u.CallSign-@u.CallSignNumber)</option>
+                                                        }
+                                                    </select>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">No units in group yet</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button class="btn btn-success" @onclick="() => AcceptUserRequestAsync(user)">
+                                                        <i class="bi bi-check-lg"></i> Accept
+                                                    </button>
+                                                    <button class="btn btn-outline-danger" @onclick="() => RejectUserRequestAsync(user)">
+                                                        <i class="bi bi-x-lg"></i> Reject
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* GROUPS LIST WITH UNIT AND USER MANAGEMENT *@
+            <h4 class="mb-3"><i class="bi bi-collection"></i> Managed Groups</h4>
+            @if (!groups.Any())
+            {
+                <div class="alert alert-info">
+                    No groups found. Create a group above to get started.
+                </div>
+            }
+            else
+            {
+                @foreach (var group in groups)
+                {
+                    <div class="card mb-4 shadow-sm">
+                        <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                            <div>
+                                <h5 class="mb-0 d-inline">@group.Name</h5>
+                                <span class="badge bg-secondary ms-2">CallSign: @group.CallSign-@group.CallSignNumber</span>
+                                <span class="badge bg-info text-dark ms-1">@group.Units.Count Units</span>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-light me-1" @onclick="() => ToggleCreateUnitForm(group.ID)">
+                                    <i class="bi bi-plus-lg"></i> @(showCreateUnitForGroup == group.ID ? "Cancel" : "Add Unit")
+                                </button>
+                                <button class="btn btn-sm btn-outline-light" @onclick="() => ToggleAssignUserForm(group.ID)">
+                                    <i class="bi bi-person-plus"></i> @(showAssignUserForGroup == group.ID ? "Cancel" : "Assign User")
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            @* Inline Add Unit Form *@
+                            @if (showCreateUnitForGroup == group.ID)
+                            {
+                                <div class="card card-body mb-3 border-primary">
+                                    <h6 class="card-title text-primary"><i class="bi bi-plus-circle"></i> Add Unit to @group.Name</h6>
+                                    <EditForm Model="newUnitModel" OnValidSubmit="() => CreateUnitAsync(group.ID)">
+                                        <DataAnnotationsValidator />
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-3">
+                                                <label class="form-label small">Unit Name *</label>
+                                                <InputText class="form-control form-control-sm" @bind-Value="newUnitModel.Name" placeholder="e.g. Squad 1" required />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small">CallSign</label>
+                                                <InputText class="form-control form-control-sm" @bind-Value="newUnitModel.CallSign" placeholder="e.g. SQUAD1" />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small">CallSign #</label>
+                                                <InputNumber class="form-control form-control-sm" @bind-Value="newUnitModel.CallSignNumber" min="0" />
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label small">Marker Radius (m)</label>
+                                                <InputNumber class="form-control form-control-sm" @bind-Value="newUnitModel.MarkerRaduis" min="0" />
+                                            </div>
+                                            <div class="col-md-3">
+                                                <button type="submit" class="btn btn-sm btn-primary w-100">
+                                                    <i class="bi bi-check-circle"></i> Save Unit
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </EditForm>
+                                </div>
+                            }
+
+                            @* Inline Assign User to Unit Form *@
+                            @if (showAssignUserForGroup == group.ID)
+                            {
+                                <div class="card card-body mb-3 border-success">
+                                    <h6 class="card-title text-success"><i class="bi bi-person-check"></i> Assign User to Unit in @group.Name</h6>
+                                    <div class="row g-2 align-items-end">
+                                        <div class="col-md-5">
+                                            <label class="form-label small">Select User</label>
+                                            <select class="form-select form-select-sm" @bind="assignUserId">
+                                                <option value="">-- Choose User --</option>
+                                                @foreach (var u in allUsers)
+                                                {
+                                                    var currentInfo = u.Unit != null ? $" (Currently in: {u.Unit.Name})" : " (Unassigned)";
+                                                    <option value="@u.ID">@u.Name [@u.CallSign-@u.CallSignNumber]@currentInfo</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label small">Select Target Unit</label>
+                                            <select class="form-select form-select-sm" @bind="assignUnitId">
+                                                <option value="">-- Choose Unit --</option>
+                                                @foreach (var u in group.Units)
+                                                {
+                                                    <option value="@u.ID">@u.Name (@u.CallSign-@u.CallSignNumber)</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-sm btn-success flex-grow-1" @onclick="() => AssignUserToUnitAsync(assignUserId, assignUnitId)">
+                                                    <i class="bi bi-check-lg"></i> Assign
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ToggleAssignUserForm(group.ID)">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+
+                            @* UNITS IN THIS GROUP *@
+                            @if (!group.Units.Any())
+                            {
+                                <p class="text-muted fst-italic mb-0">No units in this group yet. Click "Add Unit" to create one.</p>
+                            }
+                            else
+                            {
+                                <div class="row row-cols-1 row-cols-md-2 g-3">
+                                    @foreach (var unit in group.Units)
+                                    {
+                                        <div class="col">
+                                            <div class="card h-100 border">
+                                                <div class="card-header d-flex justify-content-between align-items-center py-2">
+                                                    <div>
+                                                        <strong>@unit.Name</strong>
+                                                        <span class="badge bg-secondary ms-1">@unit.CallSign-@unit.CallSignNumber</span>
+                                                    </div>
+                                                    <span class="badge bg-info text-dark">Radius: @(unit.MarkerRaduis)m</span>
+                                                </div>
+                                                <div class="card-body p-2">
+                                                    <div class="small mb-2">
+                                                        <strong>Leader:</strong>
+                                                        @if (unit.Leader != null)
+                                                        {
+                                                            <span class="text-primary font-monospace">@unit.Leader.Name (@unit.Leader.CallSign-@unit.Leader.CallSignNumber)</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">None</span>
+                                                        }
+                                                    </div>
+
+                                                    <h6 class="small text-muted mb-1">Assigned Users (@unit.Users.Count):</h6>
+                                                    @if (!unit.Users.Any())
+                                                    {
+                                                        <p class="small text-muted mb-2">No users assigned.</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <ul class="list-group list-group-flush small mb-2">
+                                                            @foreach (var member in unit.Users)
+                                                            {
+                                                                <li class="list-group-item d-flex justify-content-between align-items-center px-1 py-1">
+                                                                    <div>
+                                                                        <span>@member.Name</span>
+                                                                        <span class="badge bg-secondary ms-1">@member.CallSign-@member.CallSignNumber</span>
+                                                                        @if (unit.LeaderId == member.ID)
+                                                                        {
+                                                                            <span class="badge bg-warning text-dark ms-1">Leader</span>
+                                                                        }
+                                                                    </div>
+                                                                    <div class="btn-group btn-group-sm">
+                                                                        @if (unit.LeaderId != member.ID)
+                                                                        {
+                                                                            <button class="btn btn-outline-secondary btn-sm py-0 px-1" title="Set as Leader" @onclick="() => SetUnitLeaderAsync(unit, member.ID)">
+                                                                                <i class="bi bi-star"></i>
+                                                                            </button>
+                                                                        }
+                                                                        <button class="btn btn-outline-danger btn-sm py-0 px-1" title="Remove from Unit" @onclick="() => RemoveUserFromUnitAsync(member)">
+                                                                            <i class="bi bi-person-x"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        }
+        else
+        {
+            @* STANDARD USER VIEW: CAN SEE ALL AVAILABLE GROUPS AND OPT TO JOIN ONE *@
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-grid-3x3-gap"></i> Available Groups</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Browse the available groups below and opt to join one. A group manager will review your request.</p>
+
+                    @if (!groups.Any())
+                    {
+                        <div class="alert alert-info">
+                            No groups are currently available.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row row-cols-1 row-cols-md-2 g-4">
+                            @foreach (var group in groups)
+                            {
+                                var isCurrentGroup = currentUser.GroupId == group.ID || currentUser.Unit?.GroupId == group.ID;
+                                var isRequestedGroup = currentUser.RequestedGroupId == group.ID;
+
+                                <div class="col">
+                                    <div class="card h-100 shadow-sm @(isCurrentGroup ? "border-success" : isRequestedGroup ? "border-warning" : "")">
+                                        <div class="card-header d-flex justify-content-between align-items-center @(isCurrentGroup ? "bg-success text-white" : isRequestedGroup ? "bg-warning text-dark" : "")">
+                                            <div>
+                                                <h5 class="mb-0 d-inline">@group.Name</h5>
+                                                <span class="badge @(isCurrentGroup ? "bg-secondary text-white" : "bg-secondary") ms-2">
+                                                    @group.CallSign-@group.CallSignNumber
+                                                </span>
+                                            </div>
+                                            @if (isCurrentGroup)
+                                            {
+                                                <span class="badge bg-secondary text-success fw-bold"><i class="bi bi-check-circle-fill"></i> Joined</span>
+                                            }
+                                            else if (isRequestedGroup)
+                                            {
+                                                <span class="badge bg-dark text-warning fw-bold"><i class="bi bi-hourglass-split"></i> Pending Request</span>
+                                            }
+                                        </div>
+                                        <div class="card-body">
+                                            <h6 class="text-muted mb-2">Units in Group (@group.Units.Count):</h6>
+                                            @if (!group.Units.Any())
+                                            {
+                                                <p class="small text-muted">No units in this group yet.</p>
+                                            }
+                                            else
+                                            {
+                                                <ul class="list-group list-group-flush mb-3">
+                                                    @foreach (var unit in group.Units)
+                                                    {
+                                                        var isUserUnit = currentUser.UnitId == unit.ID;
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center px-2 py-1 @(isUserUnit ? "fw-bold" : "")">
+                                                            <span>
+                                                                <i class="bi bi-shield me-1"></i> @unit.Name (@unit.CallSign-@unit.CallSignNumber)
+                                                            </span>
+                                                            <span class="badge bg-secondary rounded-pill">@unit.Users.Count members</span>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+
+                                            <div class="mt-3">
+                                                @if (isCurrentGroup)
+                                                {
+                                                    @if (currentUser.Unit != null && currentUser.Unit.GroupId == group.ID)
+                                                    {
+                                                        <div class="text-success small fw-bold mb-2">
+                                                            <i class="bi bi-check-lg"></i> You are currently a member of unit: @(currentUser.Unit.Name)
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="text-success small fw-bold mb-2">
+                                                            <i class="bi bi-check-lg"></i> You are a member of this group (Unassigned Unit)
+                                                        </div>
+                                                    }
+                                                    <button class="btn btn-outline-danger btn-sm" @onclick="LeaveCurrentUnitAsync">
+                                                        <i class="bi bi-box-arrow-right"></i> Leave Group
+                                                    </button>
+                                                }
+                                                else if (isRequestedGroup)
+                                                {
+                                                    <button class="btn btn-warning btn-sm" @onclick="CancelJoinRequestAsync">
+                                                        <i class="bi bi-x-circle"></i> Cancel Join Request
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-outline-primary btn-sm" @onclick="() => OptToJoinGroupAsync(group.ID)">
+                                                        <i class="bi bi-box-arrow-in-right"></i> Opt to Join
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool isLoading = true;
+    private User? currentUser;
+    private List<Group> groups = new();
+    private List<User> allUsers = new();
+    private List<User> pendingUsers = new();
+
+    private string? successMessage;
+    private string? errorMessage;
+
+    // View toggles
+    private Guid? showCreateUnitForGroup;
+    private Guid? showAssignUserForGroup;
+
+    // Forms and inputs
+    private CallSignFormModel callSignModel = new();
+    private GroupFormModel newGroupModel = new();
+    private UnitFormModel newUnitModel = new();
+
+    private Guid? assignUserId;
+    private Guid? assignUnitId;
+    private Dictionary<Guid, Guid?> selectedAcceptUnitIds = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var claimsPrincipal = authState.User;
+            var userId = claimsPrincipal.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                isLoading = false;
+                return;
+            }
+
+            // Load current user profile
+            currentUser = await DbContext.Profiles
+                .Include(u => u.Group)
+                .Include(u => u.Unit)
+                    .ThenInclude(un => un!.Group)
+                .Include(u => u.RequestedGroup)
+                .FirstOrDefaultAsync(u => u.ApplicationUserId == userId);
+
+            if (currentUser != null)
+            {
+                callSignModel.CallSign = currentUser.CallSign;
+                callSignModel.CallSignNumber = currentUser.CallSignNumber;
+                callSignModel.Name = currentUser.Name;
+            }
+
+            // Load groups with units and their users
+            groups = await DbContext.Groups
+                .Include(g => g.Units)
+                    .ThenInclude(u => u.Users)
+                .Include(g => g.Units)
+                    .ThenInclude(u => u.Leader)
+                .OrderBy(g => g.Name)
+                .ToListAsync();
+
+            // Load all users for assignment
+            allUsers = await DbContext.Profiles
+                .Include(u => u.Group)
+                .Include(u => u.Unit)
+                .Include(u => u.ApplicationUser)
+                .OrderBy(u => u.Name)
+                .ToListAsync();
+
+            // Load pending requests
+            pendingUsers = await DbContext.Profiles
+                .Include(u => u.RequestedGroup)
+                .Include(u => u.ApplicationUser)
+                .Where(u => u.RequestedGroupId != null)
+                .ToListAsync();
+
+            foreach (var user in pendingUsers)
+            {
+                if (!selectedAcceptUnitIds.ContainsKey(user.ID))
+                {
+                    selectedAcceptUnitIds[user.ID] = null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading data: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveCallSignSettingsAsync()
+    {
+        if (currentUser == null) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(currentUser.ID);
+            if (userInDb != null)
+            {
+                userInDb.CallSign = callSignModel.CallSign?.Trim() ?? string.Empty;
+                userInDb.CallSignNumber = callSignModel.CallSignNumber;
+                userInDb.Name = callSignModel.Name?.Trim() ?? string.Empty;
+
+                await DbContext.SaveChangesAsync();
+                successMessage = "Callsign and profile updated successfully!";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to update callsign: {ex.Message}";
+        }
+    }
+
+    private async Task CreateGroupAsync()
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+
+        try
+        {
+            var group = new Group
+            {
+                ID = Guid.NewGuid(),
+                Name = newGroupModel.Name.Trim(),
+                CallSign = newGroupModel.CallSign?.Trim() ?? string.Empty,
+                CallSignNumber = newGroupModel.CallSignNumber
+            };
+
+            DbContext.Groups.Add(group);
+            await DbContext.SaveChangesAsync();
+
+            newGroupModel = new();
+            successMessage = $"Group '{group.Name}' created successfully!";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to create group: {ex.Message}";
+        }
+    }
+
+    private void ToggleCreateUnitForm(Guid groupId)
+    {
+        if (showCreateUnitForGroup == groupId)
+        {
+            showCreateUnitForGroup = null;
+        }
+        else
+        {
+            showCreateUnitForGroup = groupId;
+            newUnitModel = new();
+        }
+    }
+
+    private async Task CreateUnitAsync(Guid groupId)
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+
+        try
+        {
+            var unit = new Unit
+            {
+                ID = Guid.NewGuid(),
+                GroupId = groupId,
+                Name = newUnitModel.Name.Trim(),
+                CallSign = newUnitModel.CallSign?.Trim() ?? string.Empty,
+                CallSignNumber = newUnitModel.CallSignNumber,
+                MarkerRaduis = newUnitModel.MarkerRaduis
+            };
+
+            DbContext.Units.Add(unit);
+            await DbContext.SaveChangesAsync();
+
+            showCreateUnitForGroup = null;
+            newUnitModel = new();
+            successMessage = $"Unit '{unit.Name}' created successfully!";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to create unit: {ex.Message}";
+        }
+    }
+
+    private void ToggleAssignUserForm(Guid groupId)
+    {
+        if (showAssignUserForGroup == groupId)
+        {
+            showAssignUserForGroup = null;
+        }
+        else
+        {
+            showAssignUserForGroup = groupId;
+            assignUserId = null;
+            assignUnitId = null;
+        }
+    }
+
+    private async Task AssignUserToUnitAsync(Guid? userId, Guid? unitId)
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+        if (userId == null || unitId == null)
+        {
+            errorMessage = "Please select both a user and a target unit.";
+            return;
+        }
+
+        try
+        {
+            var user = await DbContext.Profiles.FindAsync(userId.Value);
+            var unit = await DbContext.Units.FindAsync(unitId.Value);
+
+            if (user != null && unit != null)
+            {
+                user.GroupId = unit.GroupId;
+                user.UnitId = unit.ID;
+                user.RequestedGroupId = null; // Clear any pending join request
+
+                await DbContext.SaveChangesAsync();
+                showAssignUserForGroup = null;
+                successMessage = $"User '{user.Name}' assigned to unit '{unit.Name}'!";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to assign user: {ex.Message}";
+        }
+    }
+
+    private async Task SetUnitLeaderAsync(Unit unit, Guid leaderId)
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+
+        try
+        {
+            var unitInDb = await DbContext.Units.FindAsync(unit.ID);
+            if (unitInDb != null)
+            {
+                unitInDb.LeaderId = leaderId;
+                await DbContext.SaveChangesAsync();
+                successMessage = $"Unit leader updated!";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to set unit leader: {ex.Message}";
+        }
+    }
+
+    private async Task RemoveUserFromUnitAsync(User user)
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(user.ID);
+            if (userInDb != null)
+            {
+                // If user was unit leader, clear leader
+                var ledUnit = await DbContext.Units.FirstOrDefaultAsync(u => u.LeaderId == user.ID);
+                if (ledUnit != null)
+                {
+                    ledUnit.LeaderId = null;
+                }
+
+                userInDb.UnitId = null;
+                await DbContext.SaveChangesAsync();
+                successMessage = $"User '{userInDb.Name}' removed from unit.";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to remove user: {ex.Message}";
+        }
+    }
+
+    private async Task AcceptUserRequestAsync(User user)
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(user.ID);
+            if (userInDb == null) return;
+            if (userInDb.RequestedGroupId == null) return;
+
+            var targetGroupId = userInDb.RequestedGroupId;
+            userInDb.GroupId = targetGroupId;
+
+            if (selectedAcceptUnitIds.TryGetValue(user.ID, out var unitId) && unitId.HasValue)
+            {
+                userInDb.UnitId = unitId.Value;
+            }
+
+            userInDb.RequestedGroupId = null;
+            selectedAcceptUnitIds.Remove(user.ID);
+
+            await DbContext.SaveChangesAsync();
+            successMessage = $"Request from '{(string.IsNullOrEmpty(userInDb.Name) ? userInDb.ApplicationUserId : userInDb.Name)}' accepted.";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to accept request: {ex.Message}";
+        }
+    }
+
+    private async Task RejectUserRequestAsync(User user)
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(user.ID);
+            if (userInDb != null)
+            {
+                userInDb.RequestedGroupId = null;
+                await DbContext.SaveChangesAsync();
+                successMessage = $"Request from '{userInDb.Name}' rejected.";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to reject request: {ex.Message}";
+        }
+    }
+
+    private async Task OptToJoinGroupAsync(Guid groupId)
+    {
+        if (currentUser == null) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(currentUser.ID);
+            if (userInDb != null)
+            {
+                userInDb.RequestedGroupId = groupId;
+                await DbContext.SaveChangesAsync();
+                successMessage = "Join request submitted! A group manager will review your request.";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to submit join request: {ex.Message}";
+        }
+    }
+
+    private async Task CancelJoinRequestAsync()
+    {
+        if (currentUser == null) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(currentUser.ID);
+            if (userInDb != null)
+            {
+                userInDb.RequestedGroupId = null;
+                await DbContext.SaveChangesAsync();
+                successMessage = "Join request cancelled.";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to cancel join request: {ex.Message}";
+        }
+    }
+
+    private async Task LeaveCurrentUnitAsync()
+    {
+        if (currentUser == null) return;
+
+        try
+        {
+            var userInDb = await DbContext.Profiles.FindAsync(currentUser.ID);
+            if (userInDb != null)
+            {
+                var ledUnit = await DbContext.Units.FirstOrDefaultAsync(u => u.LeaderId == userInDb.ID);
+                if (ledUnit != null)
+                {
+                    ledUnit.LeaderId = null;
+                }
+
+                userInDb.UnitId = null;
+                userInDb.GroupId = null;
+                userInDb.RequestedGroupId = null;
+                await DbContext.SaveChangesAsync();
+                successMessage = "You have left the group/unit.";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to leave unit: {ex.Message}";
+        }
+    }
+
+    public class CallSignFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string CallSign { get; set; } = string.Empty;
+        public int CallSignNumber { get; set; }
+    }
+
+    public class GroupFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string CallSign { get; set; } = string.Empty;
+        public int CallSignNumber { get; set; }
+    }
+
+    public class UnitFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string CallSign { get; set; } = string.Empty;
+        public int CallSignNumber { get; set; }
+        public int MarkerRaduis { get; set; } = 50;
+    }
+}

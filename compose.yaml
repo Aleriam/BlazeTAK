@@ -1,0 +1,33 @@
+﻿services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: blazetak-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: blazetak
+      POSTGRES_PASSWORD: blazetak_dev
+      POSTGRES_DB: blazetak
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  blazetak.client:
+    image: blazetak.client
+    build:
+      context: .
+      dockerfile: BlazeTAK/BlazeTAK.Client/Dockerfile
+
+  blazetak:
+    image: blazetak
+    build:
+      context: .
+      dockerfile: BlazeTAK/BlazeTAK/Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=blazetak;Username=blazetak;Password=blazetak_dev
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+

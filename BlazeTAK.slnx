@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="compose.yaml" />
+  </Folder>
+  <Project Path="BlazeTAK/BlazeTAK.Client/BlazeTAK.Client.csproj" />
+  <Project Path="BlazeTAK/BlazeTAK/BlazeTAK.csproj" />
+</Solution>
