@@ -7,6 +7,7 @@
 @using Microsoft.EntityFrameworkCore
 @using BlazeTAK.Data
 @using BlazeTAK.Data.Models
+@using BlazeTAK.Client.Models
 @using System.Linq
 
 @inject ApplicationDbContext DbContext
@@ -280,7 +281,21 @@
                                                 <InputNumber class="form-control form-control-sm" @bind-Value="newUnitModel.MarkerRaduis" min="0" />
                                             </div>
                                             <div class="col-md-3">
-                                                <button type="submit" class="btn btn-sm btn-primary w-100">
+                                                <label class="form-label small">Marker Type (SIDC)</label>
+                                                <select class="form-select form-select-sm font-monospace" @bind="newUnitModel.UnitType">
+                                                    @foreach (var cat in markerCategories)
+                                                    {
+                                                        <optgroup label="@cat.Name">
+                                                            @foreach (var sym in cat.Symbols)
+                                                            {
+                                                                <option value="@sym.Sidc">@sym.Name (@sym.Sidc)</option>
+                                                            }
+                                                        </optgroup>
+                                                    }
+                                                </select>
+                                            </div>
+                                            <div class="col-12 mt-2">
+                                                <button type="submit" class="btn btn-sm btn-primary">
                                                     <i class="bi bi-check-circle"></i> Save Unit
                                                 </button>
                                             </div>
@@ -346,10 +361,69 @@
                                                     <div>
                                                         <strong>@unit.Name</strong>
                                                         <span class="badge bg-secondary ms-1">@unit.CallSign-@unit.CallSignNumber</span>
+                                                        <span class="badge bg-primary ms-1 font-monospace" title="Unit Marker SIDC">@(!string.IsNullOrEmpty(unit.UnitType) ? unit.UnitType : "SFGPUCI----")</span>
                                                     </div>
-                                                    <span class="badge bg-info text-dark">Radius: @(unit.MarkerRaduis)m</span>
+                                                    <div class="d-flex align-items-center gap-1">
+                                                        <span class="badge bg-info text-dark">Radius: @(unit.MarkerRaduis)m</span>
+                                                        @if (currentUser.EditGroupData)
+                                                        {
+                                                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Edit Unit Settings" @onclick="() => StartEditUnit(unit)">
+                                                                <i class="bi bi-gear-fill"></i>
+                                                            </button>
+                                                        }
+                                                    </div>
                                                 </div>
                                                 <div class="card-body p-2">
+                                                    @if (editingUnitId == unit.ID)
+                                                    {
+                                                        <div class="p-2 mb-2 bg-light rounded border border-warning">
+                                                            <h6 class="small fw-bold text-dark mb-2"><i class="bi bi-gear"></i> Edit Unit Settings</h6>
+                                                            <EditForm Model="editUnitModel" OnValidSubmit="SaveEditUnitAsync">
+                                                                <DataAnnotationsValidator />
+                                                                <div class="row g-2 align-items-end">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small">Unit Name</label>
+                                                                        <InputText class="form-control form-control-sm" @bind-Value="editUnitModel.Name" required />
+                                                                    </div>
+                                                                    <div class="col-md-3">
+                                                                        <label class="form-label small">CallSign</label>
+                                                                        <InputText class="form-control form-control-sm" @bind-Value="editUnitModel.CallSign" />
+                                                                    </div>
+                                                                    <div class="col-md-3">
+                                                                        <label class="form-label small">CallSign #</label>
+                                                                        <InputNumber class="form-control form-control-sm" @bind-Value="editUnitModel.CallSignNumber" min="0" />
+                                                                    </div>
+                                                                    <div class="col-md-4">
+                                                                        <label class="form-label small">Marker Radius (m)</label>
+                                                                        <InputNumber class="form-control form-control-sm" @bind-Value="editUnitModel.MarkerRaduis" min="0" />
+                                                                    </div>
+                                                                    <div class="col-md-8">
+                                                                        <label class="form-label small">Marker Type (SIDC)</label>
+                                                                        <select class="form-select form-select-sm font-monospace" @bind="editUnitModel.UnitType">
+                                                                            @foreach (var cat in markerCategories)
+                                                                            {
+                                                                                <optgroup label="@cat.Name">
+                                                                                    @foreach (var sym in cat.Symbols)
+                                                                                    {
+                                                                                        <option value="@sym.Sidc">@sym.Name (@sym.Sidc)</option>
+                                                                                    }
+                                                                                </optgroup>
+                                                                            }
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-12 mt-2 d-flex gap-2">
+                                                                        <button type="submit" class="btn btn-sm btn-success">
+                                                                            <i class="bi bi-check-lg"></i> Save Changes
+                                                                        </button>
+                                                                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelEditUnit">
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </EditForm>
+                                                        </div>
+                                                    }
+
                                                     <div class="small mb-2">
                                                         <strong>Leader:</strong>
                                                         @if (unit.Leader != null)
@@ -521,6 +595,7 @@
     private List<Group> groups = new();
     private List<User> allUsers = new();
     private List<User> pendingUsers = new();
+    private List<MarkerCategory> markerCategories = MarkerSymbolDefinitions.GetCategories();
 
     private string? successMessage;
     private string? errorMessage;
@@ -528,11 +603,13 @@
     // View toggles
     private Guid? showCreateUnitForGroup;
     private Guid? showAssignUserForGroup;
+    private Guid? editingUnitId;
 
     // Forms and inputs
     private CallSignFormModel callSignModel = new();
     private GroupFormModel newGroupModel = new();
     private UnitFormModel newUnitModel = new();
+    private UnitFormModel editUnitModel = new();
 
     private Guid? assignUserId;
     private Guid? assignUnitId;
@@ -574,20 +651,14 @@
             }
 
             // Load groups with units and their users
-            groups = await DbContext.Profiles
-                .Where(u => u.GroupId == currentUser.GroupId) // Filter users by GroupId
-                .Select(u => u.Group) // Navigate to the related Group entity via GroupId
-                .Distinct() // Avoid duplicates
-                .ToListAsync(); // Convert to a List<Group>                
-                
-                /*
+            groups = await DbContext.Groups
                 .Include(g => g.Units)
                     .ThenInclude(u => u.Users)
                 .Include(g => g.Units)
                     .ThenInclude(u => u.Leader)
                 .OrderBy(g => g.Name)
                 .ToListAsync();
-*/
+
             // Load all users for assignment
             allUsers = await DbContext.Profiles
                 .Include(u => u.Group)
@@ -698,7 +769,8 @@
                 Name = newUnitModel.Name.Trim(),
                 CallSign = newUnitModel.CallSign?.Trim() ?? string.Empty,
                 CallSignNumber = newUnitModel.CallSignNumber,
-                MarkerRaduis = newUnitModel.MarkerRaduis
+                MarkerRaduis = newUnitModel.MarkerRaduis,
+                UnitType = string.IsNullOrWhiteSpace(newUnitModel.UnitType) ? "SFGPUCI----" : newUnitModel.UnitType.Trim()
             };
 
             DbContext.Units.Add(unit);
@@ -712,6 +784,53 @@
         catch (Exception ex)
         {
             errorMessage = $"Failed to create unit: {ex.Message}";
+        }
+    }
+
+    private void StartEditUnit(Unit unit)
+    {
+        editingUnitId = unit.ID;
+        editUnitModel = new UnitFormModel
+        {
+            Id = unit.ID,
+            Name = unit.Name,
+            CallSign = unit.CallSign,
+            CallSignNumber = unit.CallSignNumber,
+            MarkerRaduis = unit.MarkerRaduis,
+            UnitType = string.IsNullOrWhiteSpace(unit.UnitType) ? "SFGPUCI----" : unit.UnitType
+        };
+    }
+
+    private void CancelEditUnit()
+    {
+        editingUnitId = null;
+    }
+
+    private async Task SaveEditUnitAsync()
+    {
+        if (currentUser == null || !currentUser.EditGroupData) return;
+        if (editUnitModel.Id == null) return;
+
+        try
+        {
+            var unitInDb = await DbContext.Units.FindAsync(editUnitModel.Id.Value);
+            if (unitInDb != null)
+            {
+                unitInDb.Name = editUnitModel.Name.Trim();
+                unitInDb.CallSign = editUnitModel.CallSign?.Trim() ?? string.Empty;
+                unitInDb.CallSignNumber = editUnitModel.CallSignNumber;
+                unitInDb.MarkerRaduis = editUnitModel.MarkerRaduis;
+                unitInDb.UnitType = string.IsNullOrWhiteSpace(editUnitModel.UnitType) ? "SFGPUCI----" : editUnitModel.UnitType.Trim();
+
+                await DbContext.SaveChangesAsync();
+                editingUnitId = null;
+                successMessage = $"Unit '{unitInDb.Name}' settings updated successfully!";
+                await LoadDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to update unit: {ex.Message}";
         }
     }
 
@@ -949,9 +1068,11 @@
 
     public class UnitFormModel
     {
+        public Guid? Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string CallSign { get; set; } = string.Empty;
         public int CallSignNumber { get; set; }
         public int MarkerRaduis { get; set; } = 50;
+        public string UnitType { get; set; } = "SFGPUCI----";
     }
 }

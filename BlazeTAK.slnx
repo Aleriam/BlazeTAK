@@ -4,4 +4,5 @@
   </Folder>
   <Project Path="BlazeTAK/BlazeTAK.Client/BlazeTAK.Client.csproj" />
   <Project Path="BlazeTAK/BlazeTAK/BlazeTAK.csproj" />
+  <Project Path="BlazeTAK.Tests/BlazeTAK.Tests.csproj" />
 </Solution>

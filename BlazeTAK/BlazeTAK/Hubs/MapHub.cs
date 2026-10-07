@@ -3,6 +3,7 @@ using System.Security.Claims;
 using BlazeTAK.Client.Models;
 using BlazeTAK.Data;
 using BlazeTAK.Data.Models;
+using BlazeTAK.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
@@ -16,15 +17,22 @@ public class MapHub : Hub
 {
     private static readonly ConcurrentDictionary<string, Guid?> _userGroupCache = new();
     private static readonly ConcurrentDictionary<string, string?> _userGroupNameCache = new();
+    private static readonly ConcurrentDictionary<string, Guid?> _userUnitCache = new();
 
     private readonly ApplicationDbContext _dbContext;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IUserLocationService _userLocationService;
     private readonly ILogger<MapHub> _logger;
     
-    public MapHub(ApplicationDbContext dbContext, UserManager<ApplicationUser> userManager, ILogger<MapHub> logger)
+    public MapHub(
+        ApplicationDbContext dbContext, 
+        UserManager<ApplicationUser> userManager, 
+        IUserLocationService userLocationService,
+        ILogger<MapHub> logger)
     {
         _dbContext = dbContext;
         _userManager = userManager;
+        _userLocationService = userLocationService;
         _logger = logger;
     }
     
@@ -112,6 +120,55 @@ public class MapHub : Hub
         return null;
     }
 
+    private async Task<User?> GetCurrentUserProfileAsync()
+    {
+        if (Context.User?.Identity?.IsAuthenticated != true)
+        {
+            return null;
+        }
+
+        var appUser = await _userManager.GetUserAsync(Context.User);
+        if (appUser == null)
+        {
+            return null;
+        }
+
+        return await _dbContext.Profiles
+            .Include(p => p.Group)
+            .Include(p => p.Unit)
+                .ThenInclude(u => u!.Group)
+            .FirstOrDefaultAsync(p => p.ApplicationUserId == appUser.Id);
+    }
+
+    private async Task<Guid?> GetUnitIdForCurrentUser()
+    {
+        try
+        {
+            if (Context.User?.Identity?.IsAuthenticated == true)
+            {
+                var userId = Context.UserIdentifier ?? Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(userId) && _userUnitCache.TryGetValue(userId, out var cachedUnitId))
+                {
+                    return cachedUnitId;
+                }
+
+                var profile = await GetCurrentUserProfileAsync();
+                if (profile != null)
+                {
+                    var cacheKey = userId ?? profile.ApplicationUserId;
+                    _userUnitCache[cacheKey] = profile.UnitId;
+                    return profile.UnitId;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve UnitId for current user");
+        }
+
+        return null;
+    }
+
     public async Task JoinGroup()
     {
         if (Context.User?.Identity?.IsAuthenticated != true)
@@ -125,6 +182,13 @@ public class MapHub : Hub
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, currentUserGroup.Value.ToString());
             _logger.LogInformation("Connection {ConnectionId} joined map group {GroupId}", Context.ConnectionId, currentUserGroup.Value);
+        }
+
+        var currentUserUnit = await GetUnitIdForCurrentUser();
+        if (currentUserUnit != null && currentUserUnit != Guid.Empty)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"unit_{currentUserUnit.Value}");
+            _logger.LogInformation("Connection {ConnectionId} joined map unit {UnitId}", Context.ConnectionId, currentUserUnit.Value);
         }
     }
 
@@ -141,6 +205,102 @@ public class MapHub : Hub
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, currentUserGroup.Value.ToString());
             _logger.LogInformation("Connection {ConnectionId} left map group {GroupId}", Context.ConnectionId, currentUserGroup.Value);
         }
+
+        var currentUserUnit = await GetUnitIdForCurrentUser();
+        if (currentUserUnit != null && currentUserUnit != Guid.Empty)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"unit_{currentUserUnit.Value}");
+            _logger.LogInformation("Connection {ConnectionId} left map unit {UnitId}", Context.ConnectionId, currentUserUnit.Value);
+        }
+    }
+
+    public async Task<UserLocationDto?> UpdateUserLocation(LocationUpdateDto dto)
+    {
+        if (Context.User?.Identity?.IsAuthenticated != true)
+        {
+            return null;
+        }
+
+        try
+        {
+            var profile = await GetCurrentUserProfileAsync();
+            if (profile == null)
+            {
+                return null;
+            }
+
+            var (isSignificantUserMove, unitMarkersChanged, userLocation, unitMarkers) = 
+                await _userLocationService.UpdateUserLocationAsync(profile.ID, dto, _dbContext);
+
+            if (userLocation != null && profile.UnitId.HasValue && isSignificantUserMove)
+            {
+                // Position is shared ONLY between members of the same unit
+                await Clients.Group($"unit_{profile.UnitId.Value}").SendAsync("UserLocationUpdated", userLocation);
+            }
+
+            if (unitMarkersChanged)
+            {
+                var groupId = profile.GroupId ?? profile.Unit?.GroupId;
+                if (groupId.HasValue)
+                {
+                    var groupUnitMarkers = await _userLocationService.GetGroupLiveUnitMarkersAsync(groupId.Value, _dbContext);
+                    await Clients.Group(groupId.Value.ToString()).SendAsync("UnitMarkersUpdated", groupUnitMarkers);
+                }
+            }
+
+            return userLocation;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating user location");
+            return null;
+        }
+    }
+
+    public async Task<List<UserLocationDto>> GetUnitUserLocations()
+    {
+        if (Context.User?.Identity?.IsAuthenticated != true)
+        {
+            return new List<UserLocationDto>();
+        }
+
+        try
+        {
+            var profile = await GetCurrentUserProfileAsync();
+            if (profile?.UnitId != null)
+            {
+                return _userLocationService.GetUnitUserLocations(profile.UnitId.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching unit user locations");
+        }
+
+        return new List<UserLocationDto>();
+    }
+
+    public async Task<List<LiveUnitMarkerDto>> GetLiveUnitMarkers()
+    {
+        if (Context.User?.Identity?.IsAuthenticated != true)
+        {
+            return new List<LiveUnitMarkerDto>();
+        }
+
+        try
+        {
+            var groupId = await GetGroupIdForCurrentUser();
+            if (groupId.HasValue)
+            {
+                return await _userLocationService.GetGroupLiveUnitMarkersAsync(groupId.Value, _dbContext);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching live unit markers");
+        }
+
+        return new List<LiveUnitMarkerDto>();
     }
 
     public async Task<List<MarkerDto>> GetMarkers()

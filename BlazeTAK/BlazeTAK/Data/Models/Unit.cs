@@ -24,6 +24,8 @@ public class Unit : VirtUser
     public List<Marker> Markers { get; set; } = new();
 
     public int MarkerRaduis { get; set; } //in meters, when all users are in that radius around leader they are under one marker
+    [System.ComponentModel.DataAnnotations.MaxLength(64)]
+    public string? UnitType { get; set; } = "SFGPUCI----";
     //TODO coordinates of leader?
     [NotMapped]
     public NetTopologySuite.Geometries.Point? Location { get; set; }
