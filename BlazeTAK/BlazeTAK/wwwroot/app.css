@@ -19,26 +19,49 @@
     --bs-secondary-color: var(--front-color);
     --bs-primary: var(--front-color);
     --bs-primary-rgb: 255, 85, 33;
+    --bs-secondary: var(--highlight-color);
+    --bs-secondary-rgb: 45, 79, 173;
     --bs-link-color: var(--front-color);
     --bs-link-hover-color: var(--highlight-color);
     --bs-border-color: var(--front-color);
+    --bs-border-color-translucent: rgba(255, 85, 33, 0.35);
     --bs-card-bg: var(--bg-color);
     --bs-card-color: var(--text-color);
     --bs-card-border-color: var(--front-color);
+    --bs-card-cap-bg: var(--bg-color);
     --bs-modal-bg: var(--bg-color);
     --bs-modal-color: var(--text-color);
     --bs-modal-border-color: var(--front-color);
+    --bs-modal-header-border-color: var(--front-color);
+    --bs-modal-footer-border-color: var(--front-color);
     --bs-dropdown-bg: var(--bg-color);
     --bs-dropdown-color: var(--text-color);
     --bs-dropdown-border-color: var(--front-color);
     --bs-dropdown-link-color: var(--text-color);
     --bs-dropdown-link-hover-bg: var(--highlight-color);
     --bs-dropdown-link-hover-color: #ffffff;
+    --bs-dropdown-divider-bg: var(--front-color);
     --bs-list-group-bg: var(--bg-color);
     --bs-list-group-color: var(--text-color);
     --bs-list-group-border-color: var(--front-color);
+    --bs-list-group-action-hover-bg: var(--highlight-color);
+    --bs-list-group-action-hover-color: #ffffff;
+    --bs-list-group-active-bg: var(--highlight-color);
+    --bs-list-group-active-color: #ffffff;
+    --bs-list-group-active-border-color: var(--highlight-color);
     --bs-tertiary-bg: var(--bg-color);
     --bs-secondary-bg: #111111;
+    --bs-light-rgb: 0, 0, 0;
+    --bs-dark-rgb: 0, 0, 0;
+    --bs-accordion-bg: var(--bg-color);
+    --bs-accordion-color: var(--text-color);
+    --bs-accordion-border-color: var(--front-color);
+    --bs-accordion-btn-bg: var(--bg-color);
+    --bs-accordion-btn-color: var(--text-color);
+    --bs-accordion-active-bg: var(--bg-color);
+    --bs-accordion-active-color: var(--front-color);
+    --bs-accordion-btn-focus-border-color: var(--highlight-color);
+    --bs-accordion-btn-focus-box-shadow: 0 0 0 0.25rem rgba(45, 79, 173, 0.25);
 }
 
 html, body {
@@ -61,7 +84,7 @@ a:hover, .btn-link:hover {
     border-color: var(--front);
 }
 
-.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active, .btn-primary.active {
     color: #ffffff;
     background-color: var(--highlight);
     border-color: var(--highlight);
@@ -73,7 +96,7 @@ a:hover, .btn-link:hover {
     border-color: var(--front);
 }
 
-.btn-secondary:hover, .btn-secondary:focus, .btn-secondary:active {
+.btn-secondary:hover, .btn-secondary:focus, .btn-secondary:active, .btn-secondary.active {
     color: #ffffff;
     background-color: var(--highlight);
     border-color: var(--highlight);
@@ -81,10 +104,34 @@ a:hover, .btn-link:hover {
 
 .btn-outline-primary {
     color: var(--front);
+    background-color: transparent;
     border-color: var(--front);
 }
 
-.btn-outline-primary:hover, .btn-outline-primary:focus, .btn-outline-primary:active {
+.btn-outline-primary:hover, .btn-outline-primary:focus, .btn-outline-primary:active, .btn-outline-primary.active {
+    color: #ffffff;
+    background-color: var(--highlight);
+    border-color: var(--highlight);
+}
+
+.btn-outline-secondary {
+    color: var(--text);
+    background-color: transparent;
+    border-color: var(--front);
+}
+
+.btn-outline-secondary:hover, .btn-outline-secondary:focus, .btn-outline-secondary:active, .btn-outline-secondary.active {
+    color: #ffffff;
+    background-color: var(--highlight);
+    border-color: var(--highlight);
+}
+
+.btn-outline-light {
+    color: var(--front);
+    border-color: var(--front);
+}
+
+.btn-outline-light:hover, .btn-outline-light:focus, .btn-outline-light:active {
     color: #ffffff;
     background-color: var(--highlight);
     border-color: var(--highlight);
@@ -110,6 +157,12 @@ a:hover, .btn-link:hover {
     color: rgba(255, 85, 33, 0.6);
 }
 
+.input-group-text {
+    background-color: var(--background);
+    color: var(--front);
+    border-color: var(--front);
+}
+
 .card {
     background-color: var(--background);
     color: var(--text);
@@ -128,6 +181,21 @@ a:hover, .btn-link:hover {
     border-color: var(--front);
 }
 
+.list-group-item-action {
+    color: var(--text);
+}
+
+.list-group-item-action:hover, .list-group-item-action:focus {
+    background-color: var(--highlight);
+    color: #ffffff;
+}
+
+.list-group-item-action.active {
+    background-color: var(--highlight);
+    border-color: var(--highlight);
+    color: #ffffff;
+}
+
 .table {
     --bs-table-bg: var(--background);
     --bs-table-color: var(--text);
@@ -139,6 +207,12 @@ a:hover, .btn-link:hover {
     background-color: var(--background);
     color: var(--text);
     border: 1px solid var(--front);
+}
+
+.modal-header, .modal-footer {
+    background-color: var(--background);
+    color: var(--text);
+    border-color: var(--front);
 }
 
 .content {
@@ -171,12 +245,12 @@ h1:focus {
         content: "An error has occurred."
     }
 
-.darker-border-checkbox.form-check-input {
+.darker-border-checkbox.form-check-input, .form-check-input {
     border-color: var(--front);
     background-color: var(--background);
 }
 
-.darker-border-checkbox.form-check-input:checked {
+.darker-border-checkbox.form-check-input:checked, .form-check-input:checked {
     background-color: var(--highlight);
     border-color: var(--highlight);
 }
@@ -188,4 +262,213 @@ h1:focus {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+/* Accordion theme styling */
+.accordion {
+    --bs-accordion-bg: var(--background);
+    --bs-accordion-color: var(--text);
+    --bs-accordion-border-color: var(--front);
+    --bs-accordion-btn-bg: var(--background);
+    --bs-accordion-btn-color: var(--text);
+    --bs-accordion-btn-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ff5521'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+    --bs-accordion-btn-active-icon: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ff5521'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+    --bs-accordion-active-bg: var(--background);
+    --bs-accordion-active-color: var(--front);
+}
+
+.accordion-item {
+    background-color: var(--background);
+    border-color: var(--front);
+    color: var(--text);
+}
+
+.accordion-button {
+    background-color: var(--background);
+    color: var(--text);
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: var(--background);
+    color: var(--front);
+    box-shadow: inset 0 calc(-1 * var(--bs-accordion-border-width)) 0 var(--front);
+}
+
+.accordion-button:focus {
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 0.25rem rgba(45, 79, 173, 0.25);
+}
+
+/* Dropdown & Context Menu Styling */
+.dropdown-menu, .context-menu-box {
+    background-color: var(--background);
+    color: var(--text);
+    border: 1px solid var(--front);
+}
+
+.dropdown-item {
+    color: var(--text);
+}
+
+.dropdown-item:hover, .dropdown-item:focus {
+    background-color: var(--highlight);
+    color: #ffffff;
+}
+
+.dropdown-divider {
+    border-top: 1px solid var(--front);
+    opacity: 0.5;
+}
+
+/* Badges */
+.badge.bg-primary {
+    background-color: var(--front) !important;
+    color: var(--background) !important;
+}
+
+.badge.bg-secondary {
+    background-color: var(--background) !important;
+    color: var(--front) !important;
+    border: 1px solid var(--front);
+}
+
+.badge-theme {
+    background-color: var(--background);
+    color: var(--front);
+    border: 1px solid var(--front);
+}
+
+.badge-highlight {
+    background-color: var(--highlight);
+    color: #ffffff;
+    border: 1px solid var(--highlight);
+}
+
+/* Leaflet Map Controls and Popups */
+.leaflet-container {
+    background-color: var(--background);
+    font-family: inherit;
+}
+
+.leaflet-top.leaflet-left {
+    top: 60px;
+    left: 12px;
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: var(--background) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--front);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.7);
+    opacity: 1 !important;
+}
+
+.leaflet-popup-content {
+    margin: 12px 16px;
+    color: var(--text);
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+    color: var(--front);
+    padding: 6px;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+    color: var(--highlight-text);
+}
+
+.leaflet-bar a, .leaflet-bar a:hover {
+    background-color: var(--background) !important;
+    border-bottom: 1px solid var(--front);
+    color: var(--front);
+}
+
+.leaflet-bar {
+    border: 1px solid var(--front);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
+}
+
+.leaflet-control-attribution {
+    background: rgba(0, 0, 0, 0.8) !important;
+    color: var(--text) !important;
+}
+
+.leaflet-control-attribution a {
+    color: var(--front) !important;
+}
+
+/* Close Button Override */
+.btn-close {
+    filter: invert(48%) sepia(85%) saturate(2222%) hue-rotate(345deg) brightness(101%) contrast(102%);
+}
+
+.btn-close:focus {
+    box-shadow: 0 0 0 0.25rem rgba(45, 79, 173, 0.25);
+}
+
+/* LiveMap Theme Specific Classes */
+.livemap-container {
+    border: none !important;
+    background-color: var(--background) !important;
+}
+
+.livemap-status-bar {
+    background-color: var(--background) !important;
+    border: 1px solid var(--front) !important;
+    color: var(--text);
+    opacity: 1 !important;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.livemap-status-bar:hover {
+    border-color: var(--highlight) !important;
+}
+
+.livemap-banner-place {
+    background-color: var(--background) !important;
+    color: var(--front);
+    border: 1px solid var(--front);
+    opacity: 1 !important;
+}
+
+.livemap-banner-move {
+    background-color: var(--background) !important;
+    color: var(--front);
+    border: 1px solid var(--highlight);
+    opacity: 1 !important;
+}
+
+.livemap-toolbox {
+    background-color: var(--background) !important;
+    color: var(--text);
+    border: 1px solid var(--front) !important;
+    opacity: 1 !important;
+}
+
+.livemap-toolbox .card,
+.livemap-toolbox .card-header,
+.livemap-toolbox .card-body,
+.livemap-toolbox .accordion,
+.livemap-toolbox .accordion-item,
+.livemap-toolbox .accordion-button,
+.livemap-toolbox .accordion-body,
+.livemap-toolbox .list-group,
+.livemap-toolbox .list-group-item {
+    background-color: var(--background) !important;
+    color: var(--text) !important;
+    opacity: 1 !important;
+}
+
+.livemap-toolbox .list-group-item.active {
+    background-color: var(--highlight) !important;
+    color: #ffffff !important;
+}
+
+.livemap-panel {
+    background-color: var(--background) !important;
+    border: 1px solid var(--front);
+    color: var(--text);
+    opacity: 1 !important;
 }

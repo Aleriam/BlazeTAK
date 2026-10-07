@@ -1,6 +1,8 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@implements IDisposable
 
-<div class="page">
+<div class="page @(isLiveMap ? "page-livemap" : "")">
     <input type="checkbox" id="nav-toggle" class="nav-toggle-checkbox" title="Toggle Navigation Menu" />
 
     <div class="sidebar">
@@ -9,17 +11,26 @@
 
     <label for="nav-toggle" class="nav-backdrop" aria-hidden="true"></label>
 
-    <main>
-        <div class="top-row px-4">
-            <label for="nav-toggle" class="nav-toggle-btn" title="Toggle navigation menu" aria-label="Toggle navigation menu">
-                <span class="nav-toggle-icon"></span>
-            </label>
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+    <main class="@(isLiveMap ? "main-livemap" : "")">
+        @if (!isLiveMap)
+        {
+            <div class="top-row px-4">
+                <label for="nav-toggle" class="nav-toggle-btn" title="Toggle navigation menu" aria-label="Toggle navigation menu">
+                    <span class="nav-toggle-icon"></span>
+                </label>
+                <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            </div>
 
-        <article class="content px-4">
-            @Body
-        </article>
+            <article class="content px-4">
+                @Body
+            </article>
+        }
+        else
+        {
+            <article class="content-livemap">
+                @Body
+            </article>
+        }
     </main>
 </div>
 
@@ -28,3 +39,35 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private bool isLiveMap;
+
+    protected override void OnInitialized()
+    {
+        UpdateIsLiveMap(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateIsLiveMap(e.Location);
+        StateHasChanged();
+    }
+
+    private void UpdateIsLiveMap(string uri)
+    {
+        var relative = NavigationManager.ToBaseRelativePath(uri);
+        var qIdx = relative.IndexOfAny(new[] { '?', '#' });
+        if (qIdx >= 0)
+        {
+            relative = relative.Substring(0, qIdx);
+        }
+        isLiveMap = relative.Equals("livemap", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}
