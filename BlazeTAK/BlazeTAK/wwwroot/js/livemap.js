@@ -130,18 +130,18 @@ window.liveMap = {
         var latLng = [markerDto.latitude, markerDto.longitude];
 
         var popupContent = `
-            <div style="min-width: 200px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                <div style="font-size: 15px; font-weight: bold; border-bottom: 2px solid #0d6efd; padding-bottom: 4px; margin-bottom: 8px;">
+            <div style="min-width: 200px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text);">
+                <div style="font-size: 15px; font-weight: bold; border-bottom: 2px solid var(--front); padding-bottom: 4px; margin-bottom: 8px; color: var(--front);">
                     ${this.escapeHtml(markerDto.name || 'Tactical Marker')}
                 </div>
-                <div style="font-size: 12px; margin-bottom: 4px;"><strong>Type (SIDC):</strong> <span class="badge bg-secondary" style="font-family: monospace;">${this.escapeHtml(markerDto.unitType || 'N/A')}</span></div>
-                ${markerDto.description ? `<div style="font-size: 12px; margin-bottom: 6px; color: #495057;"><strong>Description:</strong> ${this.escapeHtml(markerDto.description)}</div>` : ''}
-                <div style="font-size: 11px; color: #6c757d; margin-top: 6px;">
+                <div style="font-size: 12px; margin-bottom: 4px;"><strong>Type (SIDC):</strong> <span class="badge badge-theme" style="font-family: monospace;">${this.escapeHtml(markerDto.unitType || 'N/A')}</span></div>
+                ${markerDto.description ? `<div style="font-size: 12px; margin-bottom: 6px; opacity: 0.9;"><strong>Description:</strong> ${this.escapeHtml(markerDto.description)}</div>` : ''}
+                <div style="font-size: 11px; opacity: 0.75; margin-top: 6px;">
                     <div><strong>Lat:</strong> ${markerDto.latitude.toFixed(5)}, <strong>Lng:</strong> ${markerDto.longitude.toFixed(5)}</div>
                     <div><strong>Created:</strong> ${new Date(markerDto.timeStamp_Created).toLocaleString()}</div>
                     ${markerDto.createdByName ? `<div><strong>By:</strong> ${this.escapeHtml(markerDto.createdByName)}</div>` : ''}
                 </div>
-                <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #dee2e6; font-size: 11px; color: #6c757d;">
+                <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--front); font-size: 11px; opacity: 0.75;">
                     <em>Right-click marker for actions (Move, Edit, Delete)</em>
                 </div>
             </div>

@@ -74,7 +74,7 @@ public class MapHub : Hub
             if (Context.User?.Identity?.IsAuthenticated == true)
             {
                 var userId = Context.UserIdentifier ?? Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (!string.IsNullOrEmpty(userId) && _userGroupNameCache.TryGetValue(userId, out var cachedGroupName))
+                if (!string.IsNullOrEmpty(userId) && _userGroupNameCache.TryGetValue(userId, out var cachedGroupName) && cachedGroupName != null)
                 {
                     return cachedGroupName;
                 }
