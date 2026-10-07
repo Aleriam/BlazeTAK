@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>aspnet-BlazeTAK-9d2cc4f3-7b4e-4f36-ac1d-08b29d3657c5</UserSecretsId>
+        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\BlazeTAK.Client\BlazeTAK.Client.csproj"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.12"/>
+        <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.12"/>
+        <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.12"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+
+</Project>

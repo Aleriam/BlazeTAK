@@ -1,0 +1,151 @@
+.page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Hide checkbox input */
+.nav-toggle-checkbox {
+    display: none;
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Three lines menu button in top left corner */
+.nav-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    cursor: pointer;
+    border: 1px solid var(--front);
+    border-radius: 4px;
+    background-color: var(--background);
+    margin-right: auto;
+    user-select: none;
+    transition: background-color 0.2s, border-color 0.2s;
+    z-index: 10;
+}
+
+.nav-toggle-btn:hover {
+    background-color: var(--highlight);
+    border-color: var(--highlight);
+}
+
+.nav-toggle-icon {
+    display: block;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='%23ff5521' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.5' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center center / contain;
+}
+
+.nav-toggle-btn:hover .nav-toggle-icon {
+    background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.5' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center center / contain;
+}
+
+/* Foldable sidebar drawer (hidden by default) */
+.sidebar {
+    background-color: var(--background);
+    border-right: 1px solid var(--front);
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 260px;
+    height: 100vh;
+    z-index: 1050;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease-in-out;
+    box-shadow: none;
+    overflow-y: auto;
+}
+
+/* Backdrop */
+.nav-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    cursor: pointer;
+}
+
+/* Show sidebar and backdrop when toggler is checked */
+.nav-toggle-checkbox:checked ~ .sidebar {
+    transform: translateX(0);
+    box-shadow: 4px 0 15px rgba(0, 0, 0, 0.6);
+}
+
+.nav-toggle-checkbox:checked ~ .nav-backdrop {
+    display: block;
+}
+
+main {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+}
+
+.top-row {
+    background-color: var(--background);
+    border-bottom: 1px solid var(--front);
+    justify-content: space-between;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+    .top-row ::deep a, .top-row ::deep .btn-link {
+        white-space: nowrap;
+        margin-left: 1.5rem;
+        text-decoration: none;
+        color: var(--front);
+    }
+
+    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
+        text-decoration: underline;
+        color: var(--highlight-text);
+    }
+
+    .top-row ::deep a:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .top-row, article {
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+
+#blazor-error-ui {
+    color-scheme: dark only;
+    background: var(--background);
+    color: var(--text);
+    border-top: 1px solid var(--front);
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 2000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+        color: var(--front);
+    }

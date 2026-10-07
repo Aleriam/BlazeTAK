@@ -1,0 +1,829 @@
+@page "/livemap"
+@rendermode InteractiveWebAssembly
+@using BlazeTAK.Client.Models
+@using Microsoft.AspNetCore.SignalR.Client
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<PageTitle>LiveMap - Tactical Map View</PageTitle>
+
+<div class="d-flex flex-column h-100 w-100 position-relative" style="min-height: calc(100vh - 120px);">
+    <!-- Header with status and quick stats -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex align-items-center gap-2">
+            <h3 class="mb-0">LiveMap</h3>
+            @if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                <span class="badge bg-success"><i class="bi bi-broadcast"></i> Synced (@markers.Count markers)</span>
+            }
+            else
+            {
+                <span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat"></i> Connecting...</span>
+            }
+        </div>
+        <div class="text-muted small">
+            Group: <span class="badge bg-secondary font-monospace">@(string.IsNullOrEmpty(currentGroupName) ? "Global Group" : currentGroupName)</span>
+        </div>
+    </div>
+
+    <!-- Map and Overlay Container -->
+    <div class="position-relative flex-grow-1 w-100" style="min-height: 550px; height: calc(100vh - 160px); border-radius: 0px; overflow: hidden; border: 1px solid #ced4da;">
+        
+        <!-- Leaflet Map Container -->
+        <div id="@mapId" class="w-100 h-100" style="z-index: 1;"></div>
+
+        <!-- Placement Mode Banner (on top of map when user is placing marker) -->
+        @if (isPlacementMode && selectedSymbol != null)
+        {
+            <div class="position-absolute top-0 start-50 translate-middle-x mt-3 shadow-lg p-2 px-4 rounded-pill d-flex align-items-center gap-3 bg-primary text-white" style="z-index: 1000; animation: fadeIn 0.2s ease-in-out;">
+                <div>
+                    <i class="bi bi-geo-alt-fill me-1"></i>
+                    <strong>Placing:</strong> @selectedSymbol.Name
+                    <span class="badge bg-light text-primary ms-1 font-monospace">@selectedSymbol.Sidc</span>
+                    <span class="ms-2 small text-white-50">Click anywhere on map to position</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-light rounded-pill px-3" @onclick="CancelPlacementMode">
+                    <i class="bi bi-x-circle me-1"></i>Cancel
+                </button>
+            </div>
+        }
+
+        <!-- Moving Marker Banner (when user activated Move mode for a marker) -->
+        @if (movingMarkerId.HasValue && markers.TryGetValue(movingMarkerId.Value, out var movingMarker))
+        {
+            <div class="position-absolute top-0 start-50 translate-middle-x mt-3 shadow-lg p-2 px-4 rounded-pill d-flex align-items-center gap-3 bg-warning text-dark border border-dark" style="z-index: 1000; animation: fadeIn 0.2s ease-in-out;">
+                <div>
+                    <i class="bi bi-arrows-move me-1"></i>
+                    <strong>Move Mode Active:</strong> Drag <strong>@movingMarker.Name</strong> on the map to reposition.
+                </div>
+                <button type="button" class="btn btn-sm btn-dark rounded-pill px-3" @onclick="EndMoveMode">
+                    <i class="bi bi-check-circle me-1"></i>Done Moving
+                </button>
+            </div>
+        }
+
+        <!-- Right-Click Context Menu for Marker (Options: Move, Edit, Delete) -->
+        @if (showContextMenu && contextMarker != null)
+        {
+            <!-- Backdrop to close context menu when clicking outside -->
+            <div class="position-absolute top-0 start-0 w-100 h-100" style="z-index: 1200; background: transparent;" @onclick="CloseContextMenu" @oncontextmenu:preventDefault @oncontextmenu="CloseContextMenu"></div>
+
+            <div class="position-absolute shadow-lg rounded border bg-white py-1"
+                 style="z-index: 1201; left: @(contextMenuX)px; top: @(contextMenuY)px; min-width: 170px; animation: fadeIn 0.15s ease-in-out;">
+                <div class="px-3 py-1 small fw-bold text-truncate border-bottom text-muted bg-light">
+                    <i class="bi bi-pin-map-fill me-1 text-primary"></i>@contextMarker.Name
+                </div>
+                <button type="button" class="dropdown-item px-3 py-2 d-flex align-items-center gap-2 small" @onclick="() => HandleContextMenuAction(MarkerAction.Move)">
+                    <i class="bi bi-arrows-move text-primary"></i>
+                    <span><strong>Move</strong> (Drag on map)</span>
+                </button>
+                <button type="button" class="dropdown-item px-3 py-2 d-flex align-items-center gap-2 small" @onclick="() => HandleContextMenuAction(MarkerAction.Edit)">
+                    <i class="bi bi-pencil-square text-success"></i>
+                    <span><strong>Edit</strong> details</span>
+                </button>
+                <div class="dropdown-divider my-1"></div>
+                <button type="button" class="dropdown-item px-3 py-2 d-flex align-items-center gap-2 small text-danger" @onclick="() => HandleContextMenuAction(MarkerAction.Delete)">
+                    <i class="bi bi-trash-fill text-danger"></i>
+                    <span><strong>Delete</strong> marker</span>
+                </button>
+            </div>
+        }
+
+        <!-- Tactical Map Toolbox Overlay (Floating on top-right) -->
+        <div class="position-absolute top-0 end-0 m-3 shadow" style="z-index: 900; width: 320px; max-height: calc(100% - 24px); display: flex; flex-direction: column;">
+            <div class="card border-0 shadow-sm bg-body bg-opacity-95" style="backdrop-filter: blur(8px);">
+                <!-- Toolbox Header -->
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2 px-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-tools"></i>
+                        <strong class="small text-uppercase tracking-wider">Toolbox</strong>
+                    </div>
+                    <button class="btn btn-sm btn-outline-light py-0 px-2" @onclick="() => isToolboxExpanded = !isToolboxExpanded" title="Toggle Toolbox">
+                        <i class="bi @(isToolboxExpanded ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                    </button>
+                </div>
+
+                @if (isToolboxExpanded)
+                {
+                    <div class="card-body p-2 overflow-auto" style="max-height: calc(100vh - 260px);">
+                        <!-- Toolbox Action Buttons -->
+                        <div class="d-grid gap-2 mb-2">
+                            <button type="button" class="btn btn-sm @(isMarkerSelectorOpen ? "btn-primary" : "btn-outline-primary") text-start d-flex justify-content-between align-items-center" @onclick="ToggleMarkerSelector">
+                                <span><i class="bi bi-pin-map-fill me-2"></i>Add Marker</span>
+                                <i class="bi @(isMarkerSelectorOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                            </button>
+                            
+                            <button type="button" class="btn btn-sm @(isSettingsOpen ? "btn-secondary" : "btn-outline-secondary") text-start d-flex justify-content-between align-items-center" @onclick="ToggleSettings">
+                                <span><i class="bi bi-gear-fill me-2"></i>Settings</span>
+                                <i class="bi @(isSettingsOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                            </button>
+                        </div>
+
+                        <!-- Settings Panel (Extensibility placeholder) -->
+                        @if (isSettingsOpen)
+                        {
+                            <div class="p-2 mb-2 border rounded bg-light small">
+                                <h6 class="border-bottom pb-1 mb-2 font-weight-bold">Map Settings</h6>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="chkAutoPan" checked>
+                                    <label class="form-check-label" for="chkAutoPan">Auto-sync markers</label>
+                                </div>
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="chkShowLabels" checked>
+                                    <label class="form-check-label" for="chkShowLabels">Show callsign labels</label>
+                                </div>
+                                <div class="text-muted small">Standard MIL-STD-2525C / milsymbol.js engine active.</div>
+                            </div>
+                        }
+
+                        <!-- Unfoldable Categories of Available Markers -->
+                        @if (isMarkerSelectorOpen)
+                        {
+                            <div class="mt-2">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <small class="text-uppercase fw-bold text-muted" style="font-size: 0.75rem;">Available Markers</small>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Select type to place</small>
+                                </div>
+
+                                <div class="accordion accordion-flush border rounded" id="markerCategoriesAccordion">
+                                    @foreach (var category in categories)
+                                    {
+                                        var isExpanded = expandedCategoryId == category.Id;
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button py-2 px-2 @(isExpanded ? "" : "collapsed") small fw-semibold" type="button" @onclick="() => ToggleCategory(category.Id)">
+                                                    <i class="bi @category.Icon me-2 text-primary"></i>
+                                                    <span class="flex-grow-1 text-truncate">@category.Name</span>
+                                                    <span class="badge bg-light text-dark border ms-1 font-monospace" style="font-size: 0.65rem;">@category.Symbols.Count</span>
+                                                </button>
+                                            </h2>
+                                            @if (isExpanded)
+                                            {
+                                                <div class="accordion-collapse collapse show">
+                                                    <div class="accordion-body p-1 bg-light">
+                                                        <div class="list-group list-group-flush">
+                                                            @foreach (var symbol in category.Symbols)
+                                                            {
+                                                                var isSelected = selectedSymbol?.Sidc == symbol.Sidc;
+                                                                <button type="button" class="list-group-item list-group-item-action p-2 d-flex align-items-center justify-content-between border-0 rounded mb-1 @(isSelected ? "active" : "")" @onclick="() => SelectSymbolToPlace(symbol)">
+                                                                    <div class="d-flex align-items-center gap-2 text-truncate">
+                                                                        @if (symbolPreviewUrls.TryGetValue(symbol.Sidc, out var imgUrl) && !string.IsNullOrEmpty(imgUrl))
+                                                                        {
+                                                                            <img src="@imgUrl" alt="@symbol.Name" style="height: 24px; width: 24px; object-fit: contain;" />
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="badge bg-secondary font-monospace" style="font-size: 0.6rem;">@symbol.Sidc.Substring(0, Math.Min(4, symbol.Sidc.Length))</span>
+                                                                        }
+                                                                        <div class="text-truncate">
+                                                                            <div class="small fw-bold text-truncate">@symbol.Name</div>
+                                                                            <div class="small text-muted text-truncate" style="font-size: 0.7rem;">@symbol.Description</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <span class="badge bg-dark bg-opacity-10 text-dark font-monospace" style="font-size: 0.6rem;">@symbol.Sidc</span>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SCREEN ON TOP OF EVERYTHING: Marker Details Modal Dialog                  -->
+<!-- ========================================================================= -->
+@if (showDetailsModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0, 0, 0, 0.65); z-index: 2000; backdrop-filter: blur(4px);">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content shadow-lg border-0">
+                <div class="modal-header bg-dark text-white py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        @if (!string.IsNullOrEmpty(modalPreviewUrl))
+                        {
+                            <img src="@modalPreviewUrl" alt="Symbol" style="height: 38px; width: 38px; object-fit: contain;" class="bg-light p-1 rounded" />
+                        }
+                        <div>
+                            <h5 class="modal-title mb-0">@(isEditingExisting ? "Edit Tactical Marker" : "Add Tactical Marker Details")</h5>
+                            <small class="text-white-50">Saving as PersistentMarker &amp; syncing with group</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" aria-label="Close" @onclick="CloseDetailsModal"></button>
+                </div>
+
+                <div class="modal-body p-4">
+                    <form @onsubmit="SaveMarkerDetails">
+                        <div class="row g-3">
+                            <!-- Marker Name -->
+                            <div class="col-md-7">
+                                <label class="form-label fw-bold">Marker Name / Callsign <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @(string.IsNullOrWhiteSpace(newMarkerModel.Name) ? "is-invalid" : "")" @bind="newMarkerModel.Name" @bind:event="oninput" placeholder="e.g. 1st Platoon / Alpha Team" required autofocus />
+                                <div class="invalid-feedback">Please enter a marker name or callsign.</div>
+                            </div>
+
+                            <!-- UnitType / SIDC Selector -->
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">Unit Type (milsymbol SIDC)</label>
+                                <select class="form-select font-monospace" @bind="newMarkerModel.UnitType" @bind:after="UpdateModalPreview">
+                                    @foreach (var cat in categories)
+                                    {
+                                        <optgroup label="@cat.Name">
+                                            @foreach (var sym in cat.Symbols)
+                                            {
+                                                <option value="@sym.Sidc">@sym.Name (@sym.Sidc)</option>
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                            </div>
+
+                            <!-- Description / Notes -->
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Description / Tactical Notes</label>
+                                <textarea class="form-control" rows="3" @bind="newMarkerModel.Description" placeholder="Enter tactical remarks, frequency, composition, orders, or mission notes..."></textarea>
+                            </div>
+
+                            <!-- Coordinates Info -->
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-muted small">Latitude</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-compass"></i></span>
+                                    <input type="number" step="0.000001" class="form-control font-monospace" @bind="newMarkerModel.Latitude" />
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-muted small">Longitude</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-compass-fill"></i></span>
+                                    <input type="number" step="0.000001" class="form-control font-monospace" @bind="newMarkerModel.Longitude" />
+                                </div>
+                            </div>
+
+                            <!-- Persistence and Group Sync Info -->
+                            <div class="col-12">
+                                <div class="alert alert-info py-2 px-3 mb-0 small d-flex align-items-center gap-2">
+                                    <i class="bi bi-info-circle-fill text-info fs-5"></i>
+                                    <div>
+                                        This marker will be saved as <strong>PersistentMarker</strong> with UnitType <code>@newMarkerModel.UnitType</code> and broadcasted in real-time to all connected users in your group.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer bg-light py-2 px-3">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseDetailsModal" disabled="@isSaving">
+                        <i class="bi bi-x-lg me-1"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary px-4" @onclick="SaveMarkerDetails" disabled="@(isSaving || string.IsNullOrWhiteSpace(newMarkerModel.Name))">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-circle-fill me-1"></i>
+                            <span>@(isEditingExisting ? "Update Marker" : "Save & Sync Marker")</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum MarkerAction
+    {
+        Move,
+        Edit,
+        Delete
+    }
+
+    private readonly string mapId = "livemap-" + Guid.NewGuid().ToString("N");
+    private bool mapInitialized;
+    private DotNetObjectReference<LiveMap>? dotNetRef;
+    private HubConnection? hubConnection;
+
+    // Toolbox State
+    private bool isToolboxExpanded = true;
+    private bool isMarkerSelectorOpen = true;
+    private bool isSettingsOpen = false;
+    private string expandedCategoryId = "friendly_ground";
+
+    // Marker Categories & Definitions
+    private List<MarkerCategory> categories = MarkerSymbolDefinitions.GetCategories();
+    private Dictionary<string, string> symbolPreviewUrls = new();
+
+    // Placement Mode State
+    private bool isPlacementMode = false;
+    private MarkerSymbolOption? selectedSymbol;
+
+    // Moving Mode State
+    private Guid? movingMarkerId;
+
+    // Context Menu State
+    private bool showContextMenu = false;
+    private double contextMenuX = 0;
+    private double contextMenuY = 0;
+    private MarkerDto? contextMarker;
+
+    // Modal Details State (Screen on top of everything)
+    private bool showDetailsModal = false;
+    private bool isEditingExisting = false;
+    private bool isSaving = false;
+    private MarkerDto newMarkerModel = new();
+    private string modalPreviewUrl = string.Empty;
+
+    // Markers state & Group
+    private Dictionary<Guid, MarkerDto> markers = new();
+    private string currentGroupName = null;
+    
+
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // Set default selected symbol
+        selectedSymbol = categories.FirstOrDefault()?.Symbols.FirstOrDefault();
+
+        // Initialize SignalR Hub Connection
+        try
+        {
+            hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/map"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            hubConnection.On<MarkerDto>("MarkerAdded", async (marker) =>
+            {
+                markers[marker.Id] = marker;
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, marker);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<MarkerDto>("MarkerUpdated", async (marker) =>
+            {
+                markers[marker.Id] = marker;
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, marker);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<Guid, double, double, DateTime>("MarkerMoved", async (markerId, lat, lng, updated) =>
+            {
+                if (markers.TryGetValue(markerId, out var existing))
+                {
+                    existing.Latitude = lat;
+                    existing.Longitude = lng;
+                    existing.TimeStamp_Updated = updated;
+                    if (mapInitialized)
+                    {
+                        await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, existing);
+                    }
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
+            hubConnection.On<Guid>("MarkerDeleted", async (markerId) =>
+            {
+                markers.Remove(markerId);
+                if (movingMarkerId == markerId)
+                {
+                    movingMarkerId = null;
+                }
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.removeMarker", mapId, markerId);
+                }
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string?>("GroupNameChanged", async (groupName) =>
+            {
+                currentGroupName = groupName;
+                await InvokeAsync(StateHasChanged);
+            });
+
+            hubConnection.On<string?>("GroupChanged", async (groupName) =>
+            {
+                currentGroupName = groupName;
+                await InvokeAsync(StateHasChanged);
+            });
+
+            
+            await hubConnection.StartAsync();
+            await hubConnection.SendAsync("JoinGroup");
+            await FetchGroupNameAsync();
+            
+            
+            var initialMarkers = await hubConnection.InvokeAsync<List<MarkerDto>>("GetMarkers");
+            if (initialMarkers != null)
+            {
+                foreach (var m in initialMarkers)
+                {
+                    markers[m.Id] = m;
+                }
+            }
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR init error: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !mapInitialized)
+        {
+            mapInitialized = true;
+            dotNetRef = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("liveMap.init", mapId, 47.5, 14.5, 6, dotNetRef);
+
+            // Pre-generate milsymbol preview images for categories
+            await LoadSymbolPreviews();
+
+            // Load existing markers onto map
+            if (markers.Count > 0)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.loadMarkers", mapId, markers.Values.ToList());
+            }
+        }
+    }
+
+    private async Task LoadSymbolPreviews()
+    {
+        foreach (var cat in categories)
+        {
+            foreach (var sym in cat.Symbols)
+            {
+                if (!symbolPreviewUrls.ContainsKey(sym.Sidc))
+                {
+                    try
+                    {
+                        var dataUrl = await JSRuntime.InvokeAsync<string>("liveMap.getSymbolDataUrl", sym.Sidc, "", 24);
+                        if (!string.IsNullOrEmpty(dataUrl))
+                        {
+                            symbolPreviewUrls[sym.Sidc] = dataUrl;
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore preview generation failure
+                    }
+                }
+            }
+        }
+        StateHasChanged();
+    }
+
+    private void ToggleMarkerSelector()
+    {
+        isMarkerSelectorOpen = !isMarkerSelectorOpen;
+        if (isMarkerSelectorOpen)
+        {
+            isSettingsOpen = false;
+        }
+    }
+
+    private void ToggleSettings()
+    {
+        isSettingsOpen = !isSettingsOpen;
+        if (isSettingsOpen)
+        {
+            isMarkerSelectorOpen = false;
+        }
+    }
+
+    private void ToggleCategory(string categoryId)
+    {
+        expandedCategoryId = expandedCategoryId == categoryId ? string.Empty : categoryId;
+    }
+
+    private async Task SelectSymbolToPlace(MarkerSymbolOption symbol)
+    {
+        selectedSymbol = symbol;
+        isPlacementMode = true;
+        await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, true);
+    }
+
+    private async Task CancelPlacementMode()
+    {
+        isPlacementMode = false;
+        await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
+    }
+
+    [JSInvokable]
+    public async Task OnMapClicked(double lat, double lng)
+    {
+        if (!isPlacementMode) return;
+
+        // Turn off placement mode
+        isPlacementMode = false;
+        await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
+
+        // Prepare details modal for new marker
+        isEditingExisting = false;
+        newMarkerModel = new MarkerDto
+        {
+            Id = Guid.NewGuid(),
+            Name = selectedSymbol?.Name ?? "Tactical Unit",
+            Description = selectedSymbol?.Description ?? string.Empty,
+            UnitType = selectedSymbol?.Sidc ?? "SFGPUCI----",
+            Latitude = Math.Round(lat, 6),
+            Longitude = Math.Round(lng, 6),
+            TimeStamp_Created = DateTime.UtcNow,
+            TimeStamp_Updated = DateTime.UtcNow
+        };
+
+        await UpdateModalPreview();
+
+        showDetailsModal = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnMarkerContextMenu(string markerIdStr, double relX, double relY, double clientX, double clientY)
+    {
+        if (Guid.TryParse(markerIdStr, out var markerId) && markers.TryGetValue(markerId, out var marker))
+        {
+            contextMarker = marker;
+            contextMenuX = Math.Max(10, relX);
+            contextMenuY = Math.Max(10, relY);
+            showContextMenu = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnMarkerDragEnd(string markerIdStr, double newLat, double newLng)
+    {
+        if (Guid.TryParse(markerIdStr, out var markerId) && markers.TryGetValue(markerId, out var marker))
+        {
+            marker.Latitude = Math.Round(newLat, 6);
+            marker.Longitude = Math.Round(newLng, 6);
+            marker.TimeStamp_Updated = DateTime.UtcNow;
+
+            try
+            {
+                if (hubConnection?.State == HubConnectionState.Connected)
+                {
+                    await hubConnection.SendAsync("MoveMarker", marker.Id, marker.Latitude, marker.Longitude);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending MoveMarker: {ex.Message}");
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void CloseContextMenu()
+    {
+        showContextMenu = false;
+        contextMarker = null;
+    }
+
+    private async Task HandleContextMenuAction(MarkerAction action)
+    {
+        if (contextMarker == null) return;
+        var targetMarker = contextMarker;
+        CloseContextMenu();
+
+        switch (action)
+        {
+            case MarkerAction.Move:
+                await StartMoveMarker(targetMarker.Id);
+                break;
+            case MarkerAction.Edit:
+                await EditMarker(targetMarker);
+                break;
+            case MarkerAction.Delete:
+                await DeleteMarker(targetMarker.Id);
+                break;
+        }
+    }
+
+    private async Task StartMoveMarker(Guid markerId)
+    {
+        // Disable dragging on previous moving marker if any
+        if (movingMarkerId.HasValue && movingMarkerId.Value != markerId)
+        {
+            await JSRuntime.InvokeVoidAsync("liveMap.setMarkerDraggable", mapId, movingMarkerId.Value, false);
+        }
+
+        movingMarkerId = markerId;
+        await JSRuntime.InvokeVoidAsync("liveMap.setMarkerDraggable", mapId, markerId, true);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task EndMoveMode()
+    {
+        if (movingMarkerId.HasValue)
+        {
+            await JSRuntime.InvokeVoidAsync("liveMap.setMarkerDraggable", mapId, movingMarkerId.Value, false);
+            movingMarkerId = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task EditMarker(MarkerDto marker)
+    {
+        isEditingExisting = true;
+        newMarkerModel = new MarkerDto
+        {
+            Id = marker.Id,
+            Name = marker.Name,
+            Description = marker.Description,
+            UnitType = marker.UnitType,
+            Latitude = marker.Latitude,
+            Longitude = marker.Longitude,
+            TimeStamp_Created = marker.TimeStamp_Created,
+            TimeStamp_Updated = marker.TimeStamp_Updated,
+            CreatedById = marker.CreatedById,
+            CreatedByName = marker.CreatedByName,
+            UnitId = marker.UnitId,
+            GroupId = marker.GroupId
+        };
+
+        await UpdateModalPreview();
+        showDetailsModal = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DeleteMarker(Guid markerId)
+    {
+        try
+        {
+            if (movingMarkerId == markerId)
+            {
+                await EndMoveMode();
+            }
+
+            markers.Remove(markerId);
+            if (mapInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.removeMarker", mapId, markerId);
+            }
+
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                await hubConnection.SendAsync("DeleteMarker", markerId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting marker: {ex.Message}");
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateModalPreview()
+    {
+        try
+        {
+            modalPreviewUrl = await JSRuntime.InvokeAsync<string>("liveMap.getSymbolDataUrl", newMarkerModel.UnitType, "", 36);
+        }
+        catch
+        {
+            modalPreviewUrl = string.Empty;
+        }
+    }
+
+    private void CloseDetailsModal()
+    {
+        showDetailsModal = false;
+        isSaving = false;
+        isEditingExisting = false;
+    }
+
+    private async Task SaveMarkerDetails()
+    {
+        if (string.IsNullOrWhiteSpace(newMarkerModel.Name)) return;
+
+        isSaving = true;
+        try
+        {
+            newMarkerModel.TimeStamp_Updated = DateTime.UtcNow;
+
+            if (hubConnection?.State == HubConnectionState.Connected)
+            {
+                if (isEditingExisting)
+                {
+                    var updated = await hubConnection.InvokeAsync<MarkerDto>("UpdateMarker", newMarkerModel);
+                    if (updated != null)
+                    {
+                        markers[updated.Id] = updated;
+                        await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, updated);
+                    }
+                }
+                else
+                {
+                    var savedMarker = await hubConnection.InvokeAsync<MarkerDto>("AddPersistentMarker", newMarkerModel);
+                    if (savedMarker != null)
+                    {
+                        markers[savedMarker.Id] = savedMarker;
+                        await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, savedMarker);
+                    }
+                }
+            }
+            else
+            {
+                // Fallback direct render if hub disconnected
+                markers[newMarkerModel.Id] = newMarkerModel;
+                await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, newMarkerModel);
+            }
+
+            showDetailsModal = false;
+            isEditingExisting = false;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving marker: {ex.Message}");
+            // Still render locally
+            markers[newMarkerModel.Id] = newMarkerModel;
+            await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateMarker", mapId, newMarkerModel);
+            showDetailsModal = false;
+            isEditingExisting = false;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    public async Task FetchGroupNameAsync()
+    {
+        if (hubConnection?.State == HubConnectionState.Connected)
+        {
+            try
+            {
+                var name = await hubConnection.InvokeAsync<string?>("GetGroupName");
+                SetGroupName(name);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching group name: {ex.Message}");
+            }
+        }
+    }
+
+    public void SetGroupName(string? name)
+    {
+        currentGroupName = name;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (dotNetRef != null)
+        {
+            dotNetRef.Dispose();
+        }
+
+        if (hubConnection != null)
+        {
+            try
+            {
+                await hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore connection dispose errors
+            }
+        }
+
+        if (mapInitialized)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.destroy", mapId);
+            }
+            catch
+            {
+                // Ignore map dispose errors
+            }
+        }
+    }
+}
