@@ -12,6 +12,7 @@ using NetTopologySuite.Geometries;
 
 namespace BlazeTAK.Hubs;
 
+//[Authorize(Roles = "Admin,user")]
 [Authorize]
 public class MapHub : Hub
 {
