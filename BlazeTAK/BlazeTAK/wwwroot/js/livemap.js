@@ -47,6 +47,10 @@ window.liveMap = {
             if (self.placementModes[elementId] && self.dotNetRefs[elementId]) {
                 self.dotNetRefs[elementId].invokeMethodAsync('OnMapClicked', e.latlng.lat, e.latlng.lng);
             }
+            else
+            {
+                self.dotNetRefs[elementId].invokeMethodAsync('OnMapClicked', e.latlng.lat, e.latlng.lng);   
+            }
         });
 
         // Invalidate size to ensure full rendering if container size changed

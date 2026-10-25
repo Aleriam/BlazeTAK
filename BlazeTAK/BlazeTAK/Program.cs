@@ -44,6 +44,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 builder.Services.AddSingleton<IUserLocationService, UserLocationService>();
+builder.Services.AddSingleton<IGlobalKeyService, GlobalKeyService>();
+builder.Services.AddSingleton<IGlobalMessageService, GlobalMessageService>();
+builder.Services.AddScoped<IUserInfoService, UserInfoService>();
 
 var app = builder.Build();
 
@@ -61,7 +64,10 @@ else
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAntiforgery();
 

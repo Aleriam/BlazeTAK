@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
-
 namespace BlazeTAK.Hubs;
 
 //[Authorize(Roles = "Admin,user")]
@@ -23,17 +22,20 @@ public class MapHub : Hub
     private readonly ApplicationDbContext _dbContext;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IUserLocationService _userLocationService;
+    private readonly IUserInfoService _userInfoService;
     private readonly ILogger<MapHub> _logger;
     
     public MapHub(
         ApplicationDbContext dbContext, 
         UserManager<ApplicationUser> userManager, 
         IUserLocationService userLocationService,
+        IUserInfoService userInfoService,
         ILogger<MapHub> logger)
     {
         _dbContext = dbContext;
         _userManager = userManager;
         _userLocationService = userLocationService;
+        _userInfoService = userInfoService;
         _logger = logger;
     }
     
@@ -123,22 +125,10 @@ public class MapHub : Hub
 
     private async Task<User?> GetCurrentUserProfileAsync()
     {
-        if (Context.User?.Identity?.IsAuthenticated != true)
-        {
-            return null;
-        }
-
         var appUser = await _userManager.GetUserAsync(Context.User);
         if (appUser == null)
-        {
             return null;
-        }
-
-        return await _dbContext.Profiles
-            .Include(p => p.Group)
-            .Include(p => p.Unit)
-                .ThenInclude(u => u!.Group)
-            .FirstOrDefaultAsync(p => p.ApplicationUserId == appUser.Id);
+        return await _userInfoService.GetCurrentUserAsync(appUser, _dbContext);
     }
 
     private async Task<Guid?> GetUnitIdForCurrentUser()

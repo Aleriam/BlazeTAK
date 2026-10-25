@@ -17,7 +17,7 @@
         <label for="nav-toggle" class="nav-toggle-btn shadow" title="Toggle navigation menu" aria-label="Toggle navigation menu">
             <span class="nav-toggle-icon"></span>
         </label>
-        <label for="nav-toggle" class="d-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar" style="height: 2.5rem;" title="Toggle navigation menu">
+        <label for="nav-toggle" class="d-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch;" title="Toggle navigation menu">
             <span class="fw-bold small text-uppercase" style="color: var(--front);"><i class="bi bi-geo-alt-fill me-1"></i>LiveMap</span>
             @if (hubConnection?.State == HubConnectionState.Connected)
             {
@@ -127,6 +127,10 @@
                         <button type="button" class="btn btn-sm @(isGpsPanelOpen ? "btn-success" : "btn-outline-success") text-start d-flex justify-content-between align-items-center" @onclick="ToggleGpsPanel">
                             <span><i class="bi bi-compass-fill me-2"></i>Live Geolocation</span>
                             <i class="bi @(isGpsPanelOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                        </button>
+                        
+                        <button type="button" class="btn btn-sm text-start d-flex justify-content-between align-items-center" @onclick="ToggleSetLocationMode">
+                            <span><i class="bi bi-compass-fill me-2" style="pointer-events: none;"></i>Set location</span>
                         </button>
                         
                         <button type="button" class="btn btn-sm @(isSettingsOpen ? "btn-secondary" : "btn-outline-secondary") text-start d-flex justify-content-between align-items-center" @onclick="ToggleSettings">
@@ -424,6 +428,9 @@
     private bool isPlacementMode = false;
     private MarkerSymbolOption? selectedSymbol;
 
+    //lcoation definiciton state
+    private bool setLocationMode = false;
+    
     // Moving Mode State
     private Guid? movingMarkerId;
 
@@ -825,33 +832,55 @@
         isPlacementMode = false;
         await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
     }
+    
+    private void ToggleSetLocationMode()
+    {
+        setLocationMode = !setLocationMode;
+        Console.WriteLine("Set location mode toggled");
+    }
 
     [JSInvokable]
     public async Task OnMapClicked(double lat, double lng)
     {
-        if (!isPlacementMode) return;
-
-        // Turn off placement mode
-        isPlacementMode = false;
-        await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
-
-        // Prepare details modal for new marker
-        isEditingExisting = false;
-        newMarkerModel = new MarkerDto
+        
+        if (setLocationMode)
         {
-            Id = Guid.NewGuid(),
-            Name = selectedSymbol?.Name ?? "Tactical Unit",
-            Description = selectedSymbol?.Description ?? string.Empty,
-            UnitType = selectedSymbol?.Sidc ?? "SFGPUCI----",
-            Latitude = Math.Round(lat, 6),
-            Longitude = Math.Round(lng, 6),
-            TimeStamp_Created = DateTime.UtcNow,
-            TimeStamp_Updated = DateTime.UtcNow
-        };
+            myLocation = new UserLocationDto
+            {
+                Latitude = Math.Round(lat, 6),
+                Longitude = Math.Round(lng, 6)
+            };
+            setLocationMode = false;    
+        }
+        else if(isPlacementMode)
+        {
+         
+            // Turn off placement mode
+            isPlacementMode = false;
+            await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
 
-        await UpdateModalPreview();
+            // Prepare details modal for new marker
+            isEditingExisting = false;
+            newMarkerModel = new MarkerDto
+            {
+                Id = Guid.NewGuid(),
+                Name = selectedSymbol?.Name ?? "Tactical Unit",
+                Description = selectedSymbol?.Description ?? string.Empty,
+                UnitType = selectedSymbol?.Sidc ?? "SFGPUCI----",
+                Latitude = Math.Round(lat, 6),
+                Longitude = Math.Round(lng, 6),
+                TimeStamp_Created = DateTime.UtcNow,
+                TimeStamp_Updated = DateTime.UtcNow
+            };
 
-        showDetailsModal = true;
+            await UpdateModalPreview();
+
+            showDetailsModal = true;   
+        }
+        else
+        {
+             return;   
+        }
         await InvokeAsync(StateHasChanged);
     }
 
