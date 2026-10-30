@@ -94,7 +94,7 @@ Engineered with high-contrast, low-light tactical UI principles (`#000000` pitch
     </tr>
     <tr>
       <td><strong>🔐 Identity & Access Control</strong></td>
-      <td>ASP.NET Core Identity with 2FA, passkeys, secure token authentication, and role-based permissions.</td>
+      <td>ASP.NET Core Identity - NOT FULLY IMPLEMENTED REGISTRATION, DO NOT SHARE ON PUBLIC ADDRESSES UNTIL FIXED, passkeys, secure token authentication, and role-based permissions.</td>
     </tr>
     <tr>
       <td><strong>🐳 Cloud & Air-Gapped Deployments</strong></td>
