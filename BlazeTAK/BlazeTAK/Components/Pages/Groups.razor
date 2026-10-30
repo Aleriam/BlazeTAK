@@ -7,11 +7,14 @@
 @using Microsoft.EntityFrameworkCore
 @using BlazeTAK.Data
 @using BlazeTAK.Data.Models
+@using BlazeTAK.Services
 @using BlazeTAK.Client.Models
 @using System.Linq
 
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject Microsoft.AspNetCore.Identity.UserManager<ApplicationUser> UserManager
+@inject Microsoft.AspNetCore.Identity.RoleManager<Microsoft.AspNetCore.Identity.IdentityRole> RoleManager
 
 <PageTitle>Groups Management</PageTitle>
 
@@ -22,7 +25,7 @@
         {
             <div>
                 <span class="badge bg-secondary me-2">CallSign: @(string.IsNullOrEmpty(_currentUser.CallSign) ? "None" : $"{_currentUser.CallSign}-{_currentUser.CallSignNumber}")</span>
-                @if (_currentUser.EditGroupData)
+                @if (_canManage)
                 {
                     <span class="badge bg-primary"><i class="bi bi-shield-lock-fill"></i> Manager (EditGroupData: Enabled)</span>
                 }
@@ -120,7 +123,7 @@
             </div>
         </div>
 
-        @if (_currentUser.EditGroupData)
+        @if (_canManage)
         {
             @* MANAGER VIEW: CAN CREATE GROUPS, UNITS, ASSIGN USERS, ACCEPT JOIN REQUESTS *@
             <div class="row mb-4">
@@ -245,6 +248,21 @@
                                 <h5 class="mb-0 d-inline">@group.Name</h5>
                                 <span class="badge bg-secondary ms-2">CallSign: @group.CallSign-@group.CallSignNumber</span>
                                 <span class="badge bg-info text-dark ms-1">@group.Units.Count Units</span>
+                                @if (group.Leader != null)
+                                {
+                                    <span class="badge bg-warning text-dark ms-1" title="Group Leader (sends on behalf of group)"><i class="bi bi-star-fill"></i> Leader: @group.Leader.CallSign-@group.Leader.CallSignNumber</span>
+                                }
+                                @if (_canManage)
+                                {
+                                    <select class="form-select form-select-sm d-inline-block w-auto" @bind="_leaderAppointIds[group.ID]">
+                                        <option value="">-- none --</option>
+                                        @foreach (var member in group.Units.SelectMany(u => u.Users).DistinctBy(u => u.ID))
+                                        {
+                                            <option value="@member.ID">@member.Name [@member.CallSign-@member.CallSignNumber]</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="btn btn-sm btn-warning" title="Appoint group leader" @onclick="() => AppointGroupLeaderAsync(group.ID)">★</button>
+                                }
                             </div>
                             <div>
                                 <button class="btn btn-sm btn-outline-light me-1" @onclick="() => ToggleCreateUnitForm(group.ID)">
@@ -365,7 +383,7 @@
                                                     </div>
                                                     <div class="d-flex align-items-center gap-1">
                                                         <span class="badge bg-info text-dark">Radius: @(unit.MarkerRaduis)m</span>
-                                                        @if (_currentUser.EditGroupData)
+                                                        @if (_canManage)
                                                         {
                                                             <button class="btn btn-outline-secondary btn-sm py-0 px-2" title="Edit Unit Settings" @onclick="() => StartEditUnit(unit)">
                                                                 <i class="bi bi-gear-fill"></i>
@@ -592,6 +610,8 @@
 @code {
     private bool _isLoading = true;
     private User? _currentUser;
+    //admin (role 'admin') always bypasses the EditGroupData verification
+    private bool _canManage;
     private List<Group> _groups = new();
     private List<User> _allUsers = new();
     private List<User> _pendingUsers = new();
@@ -614,6 +634,7 @@
     private Guid? _assignUserId;
     private Guid? _assignUnitId;
     private Dictionary<Guid, Guid?> _selectedAcceptUnitIds = new();
+    private Dictionary<Guid, Guid?> _leaderAppointIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -643,6 +664,8 @@
                 .Include(u => u.RequestedGroup)
                 .FirstOrDefaultAsync(u => u.ApplicationUserId == userId);
 
+            _canManage = claimsPrincipal.IsInRole(AppRoles.Admin) || (_currentUser?.EditGroupData ?? false);
+
             if (_currentUser != null)
             {
                 _callSignModel.CallSign = _currentUser.CallSign;
@@ -652,12 +675,21 @@
 
             // Load groups with units and their users
             _groups = await DbContext.Groups
+                .Include(g => g.Leader)
                 .Include(g => g.Units)
                     .ThenInclude(u => u.Users)
                 .Include(g => g.Units)
                     .ThenInclude(u => u.Leader)
                 .OrderBy(g => g.Name)
                 .ToListAsync();
+
+            // leader select must have an entry for every group before first render
+            // (bind on dictionary indexer throws KeyNotFoundException otherwise)
+            foreach (var group in _groups)
+            {
+                if (!_leaderAppointIds.ContainsKey(group.ID))
+                    _leaderAppointIds[group.ID] = group.LeaderId;
+            }
 
             // Load all users for assignment
             _allUsers = await DbContext.Profiles
@@ -718,7 +750,7 @@
 
     private async Task CreateGroupAsync()
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
 
         try
         {
@@ -743,6 +775,96 @@
         }
     }
 
+    private async Task AppointGroupLeaderAsync(Guid groupId)
+    {
+        if (_currentUser == null || !_canManage) return;
+        if (!_leaderAppointIds.TryGetValue(groupId, out var userId)) return;
+
+        //clearing the selection removes leadership
+        if (userId == null || userId == Guid.Empty)
+        {
+            await ClearGroupLeaderAsync(groupId);
+            return;
+        }
+
+        try
+        {
+            var user = await DbContext.Profiles
+                .Include(p => p.LeadingGroup)
+                .FirstOrDefaultAsync(p => p.ID == userId);
+            var group = await DbContext.Groups.Include(g => g.Leader).FirstOrDefaultAsync(g => g.ID == groupId);
+            if (user == null || group == null) return;
+
+            //demote previous leader
+            if (group.Leader != null)
+            {
+                var previousLeader = group.Leader;
+                previousLeader.LeadingGroup = null;
+                DbContext.Profiles.Update(previousLeader);
+
+                var previousLeaderAppUser = await UserManager.FindByIdAsync(previousLeader.ApplicationUserId);
+                //keep role if he still leads another group or any unit
+                bool stillLeader = await DbContext.Groups.AnyAsync(g => g.LeaderId == previousLeader.ID && g.ID != groupId)
+                    || await DbContext.Units.AnyAsync(u => u.LeaderId == previousLeader.ID);
+                if (!stillLeader && previousLeaderAppUser != null
+                    && !await UserManager.IsInRoleAsync(previousLeaderAppUser, AppRoles.Admin))
+                {
+                    await UserManager.RemoveFromRoleAsync(previousLeaderAppUser, AppRoles.GroupLeader);
+                }
+            }
+
+            group.LeaderId = user.ID;
+            user.LeadingGroup = group;
+            DbContext.Groups.Update(group);
+            DbContext.Profiles.Update(user);
+            await DbContext.SaveChangesAsync();
+
+            //sync identity role
+            var appUser = await UserManager.FindByIdAsync(user.ApplicationUserId);
+            if (appUser != null && !await UserManager.IsInRoleAsync(appUser, AppRoles.GroupLeader))
+                await UserManager.AddToRoleAsync(appUser, AppRoles.GroupLeader);
+
+            _successMessage = $"{user.Name} appointed as leader of '{group.Name}'.";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to appoint group leader: {ex.Message}";
+        }
+    }
+
+    private async Task ClearGroupLeaderAsync(Guid groupId)
+    {
+        try
+        {
+            var group = await DbContext.Groups.Include(g => g.Leader).FirstOrDefaultAsync(g => g.ID == groupId);
+            if (group?.Leader == null) return;
+
+            var previousLeader = group.Leader;
+            previousLeader.LeadingGroup = null;
+            DbContext.Profiles.Update(previousLeader);
+            group.LeaderId = null;
+            await DbContext.SaveChangesAsync();
+
+            //keep the role if he still leads another group or any unit
+            var previousLeaderAppUser = await UserManager.FindByIdAsync(previousLeader.ApplicationUserId);
+            var stillLeader = await DbContext.Groups.AnyAsync(g => g.LeaderId == previousLeader.ID)
+                || await DbContext.Units.AnyAsync(u => u.LeaderId == previousLeader.ID);
+            if (!stillLeader && previousLeaderAppUser != null
+                && !await UserManager.IsInRoleAsync(previousLeaderAppUser, AppRoles.Admin))
+            {
+                await UserManager.RemoveFromRoleAsync(previousLeaderAppUser, AppRoles.GroupLeader);
+            }
+
+            _successMessage = $"Leadership of '{group.Name}' cleared.";
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to clear group leader: {ex.Message}";
+        }
+    }
+
     private void ToggleCreateUnitForm(Guid groupId)
     {
         if (_showCreateUnitForGroup == groupId)
@@ -758,7 +880,7 @@
 
     private async Task CreateUnitAsync(Guid groupId)
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
 
         try
         {
@@ -808,7 +930,7 @@
 
     private async Task SaveEditUnitAsync()
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
         if (_editUnitModel.Id == null) return;
 
         try
@@ -850,7 +972,7 @@
 
     private async Task AssignUserToUnitAsync(Guid? userId, Guid? unitId)
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
         if (userId == null || unitId == null)
         {
             _errorMessage = "Please select both a user and a target unit.";
@@ -882,7 +1004,7 @@
 
     private async Task SetUnitLeaderAsync(Unit unit, Guid leaderId)
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
 
         try
         {
@@ -903,7 +1025,7 @@
 
     private async Task RemoveUserFromUnitAsync(User user)
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
 
         try
         {
@@ -931,7 +1053,7 @@
 
     private async Task AcceptUserRequestAsync(User user)
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
 
         try
         {
@@ -962,7 +1084,7 @@
 
     private async Task RejectUserRequestAsync(User user)
     {
-        if (_currentUser == null || !_currentUser.EditGroupData) return;
+        if (_currentUser == null || !_canManage) return;
 
         try
         {

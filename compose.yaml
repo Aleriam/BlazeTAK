@@ -25,6 +25,7 @@
       dockerfile: BlazeTAK/BlazeTAK/Dockerfile
     environment:
       - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=blazetak;Username=blazetak;Password=blazetak_dev
+      - Admin__Email=${ADMIN_EMAIL}
     depends_on:
       - postgres
 
