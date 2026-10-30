@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="#️-overview"><img src="https://img.shields.io/badge/STATUS-IN-DEVELOPMENT-ff5521?style=for-the-badge&logo=radar&logoColor=ff5521&labelColor=000000" alt="Status" /></a>
+  <a href="#️-overview"><img src="https://img.shields.io/badge/STATUS-IN--DEVELOPMENT-ff5521?style=for-the-badge&logo=radar&logoColor=ff5521&labelColor=000000" alt="Status" /></a>
   <a href="#-tech-stack"><img src="https://img.shields.io/badge/.NET-10.0-ff5521?style=for-the-badge&logo=dotnet&logoColor=ff5521&labelColor=000000" alt=".NET 10" /></a>
   <a href="#-tech-stack"><img src="https://img.shields.io/badge/BLAZOR-WASM%20%2B%20AUTO-2d4fad?style=for-the-badge&logo=blazor&logoColor=ffffff&labelColor=000000" alt="Blazor" /></a>
   <a href="#-tech-stack"><img src="https://img.shields.io/badge/SIGNALR-REAL--TIME%20SYNC-ff5521?style=for-the-badge&logo=socketdotio&logoColor=ff5521&labelColor=000000" alt="SignalR" /></a>
