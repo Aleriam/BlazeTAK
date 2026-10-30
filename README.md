@@ -248,12 +248,6 @@ Bug reports, event feedback from the field, and feature requests are equally val
 
 ---
 
-## 📄 License
-
-This project is licensed as open source. *(A `LICENSE` file is not yet present in the repository — see open issue on licensing.)*
-
----
-
 <p align="center">
   <sub>BlazeTAK — real-time tactical awareness for airsoft &amp; milsim teams. Stay oriented. 🔥</sub>
 </p>
