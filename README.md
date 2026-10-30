@@ -260,12 +260,9 @@ Bug reports, event feedback from the field, and feature requests are equally val
 
 ## 📄 License
 
-BlazeTAK is free and open-source software licensed under the **[MIT License](https://opensource.org/licenses/MIT)**.
+BlazeTAK is free and open-source software, licensed under the **MIT License**.
 
-- ✅ Free to use, modify, and redistribute — including for commercial event services and club deployments.
-- ⚠️ Provided "as is", without warranty of any kind (see full license text).
-
-*(Note: the repository should ship a root-level `LICENSE` file containing the full MIT license text — add it before publishing to guarantee the grant applies to all who obtain the code.)*
+The full license text is maintained in a separate root-level `LICENSE` file, following the GitHub standard convention.
 
 ---
 
