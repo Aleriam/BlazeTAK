@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="#-key-features"><img src="https://img.shields.io/badge/STATUS-OPERATIONAL-ff5521?style=for-the-badge&logo=radar&logoColor=000000&labelColor=000000" alt="Status" /></a>
+  <a href="#️-overview"><img src="https://img.shields.io/badge/STATUS-OPERATIONAL-ff5521?style=for-the-badge&logo=radar&logoColor=ff5521&labelColor=000000" alt="Status" /></a>
   <a href="#-tech-stack"><img src="https://img.shields.io/badge/.NET-10.0-ff5521?style=for-the-badge&logo=dotnet&logoColor=ff5521&labelColor=000000" alt=".NET 10" /></a>
   <a href="#-tech-stack"><img src="https://img.shields.io/badge/BLAZOR-WASM%20%2B%20AUTO-2d4fad?style=for-the-badge&logo=blazor&logoColor=ffffff&labelColor=000000" alt="Blazor" /></a>
   <a href="#-tech-stack"><img src="https://img.shields.io/badge/SIGNALR-REAL--TIME%20SYNC-ff5521?style=for-the-badge&logo=socketdotio&logoColor=ff5521&labelColor=000000" alt="SignalR" /></a>
@@ -45,6 +45,16 @@ Engineered with high-contrast, low-light tactical UI principles (`#000000` pitch
 │   MIL-STD-2525 Symbols  │      Tactical Channel Routing │  EF Core Spatial Context     │
 └─────────────────────────┴───────────────────────────────┴──────────────────────────────┘
 ```
+
+---
+
+## ⚖️ Project Independence Disclaimer
+
+> **BlazeTAK is an independent, standalone software project licensed under the MIT License.** It is **not** affiliated with, funded by, or associated with the U.S. Government, the TAK Product Center (TPC), or official TAK/ATAK/CivTAK software distributions.
+>
+> The name "TAK" is used purely descriptively to communicate the *concept* of a Team Awareness Kit. BlazeTAK is **not a fork, clone, port, or compatible client** of ATAK/WinTAK/iTAK/CivTAK, and it implements no proprietary government TAK protocols or endpoints. There is no interconnection or data compatibility intended between BlazeTAK and official TAK products, and none should be assumed.
+>
+> "ATAK", "TAK", "CivTAK", and related marks belong to their respective owners. BlazeTAK is an original work; its codebase, protocols, and data persistence are entirely its own. All signals (SignalR hubs, JSON payloads, PostGIS schema) are custom to this platform.
 
 ---
 
@@ -250,7 +260,12 @@ Bug reports, event feedback from the field, and feature requests are equally val
 
 ## 📄 License
 
-This project is licensed as open source. *(A `LICENSE` file is not yet present in the repository — see open issue on licensing.)*
+BlazeTAK is free and open-source software licensed under the **[MIT License](https://opensource.org/licenses/MIT)**.
+
+- ✅ Free to use, modify, and redistribute — including for commercial event services and club deployments.
+- ⚠️ Provided "as is", without warranty of any kind (see full license text).
+
+*(Note: the repository should ship a root-level `LICENSE` file containing the full MIT license text — add it before publishing to guarantee the grant applies to all who obtain the code.)*
 
 ---
 
