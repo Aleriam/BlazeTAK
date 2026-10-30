@@ -33,6 +33,10 @@ public class User : VirtUser
     [DeleteBehavior(DeleteBehavior.SetNull)]
     public Group? RequestedGroup { get; set; }
 
+    //group this user leads (set by admin in Groups.razor) - null for regular members
+    [InverseProperty(nameof(Models.Group.Leader))]
+    public Group? LeadingGroup { get; set; }
+
     //simple permissions for reading data of other units in group
     public bool ReadGroupData { get; set; } = true;
     public bool EditGroupData { get; set; } = false;

@@ -377,6 +377,12 @@ namespace BlazeTAK.Migrations
                 {
                     b.HasBaseType("BlazeTAK.Data.Models.VirtUser");
 
+                    b.Property<Guid?>("LeaderId")
+                        .HasColumnType("uuid");
+
+                    b.HasIndex("LeaderId")
+                        .IsUnique();
+
                     b.ToTable("Groups");
                 });
 
@@ -589,6 +595,13 @@ namespace BlazeTAK.Migrations
                         .HasForeignKey("BlazeTAK.Data.Models.Group", "ID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("BlazeTAK.Data.Models.User", "Leader")
+                        .WithOne("LeadingGroup")
+                        .HasForeignKey("BlazeTAK.Data.Models.Group", "LeaderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Leader");
                 });
 
             modelBuilder.Entity("BlazeTAK.Data.Models.Unit", b =>
@@ -667,6 +680,11 @@ namespace BlazeTAK.Migrations
                     b.Navigation("Markers");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("BlazeTAK.Data.Models.User", b =>
+                {
+                    b.Navigation("LeadingGroup");
                 });
 #pragma warning restore 612, 618
         }

@@ -5,6 +5,8 @@
 @using System.Text.Encodings.Web
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
+@using BlazeTAK.Services
+@inject IConfiguration Configuration
 @using BlazeTAK.Data
 
 @inject UserManager<ApplicationUser> UserManager
@@ -81,6 +83,16 @@
         {
             identityErrors = result.Errors;
             return;
+        }
+
+        //admin elevation: the account registering with Admin:Email gets all roles
+        //(admin is not pre-seeded, so exactly this account becomes the admin)
+        var adminEmail = Configuration["Admin:Email"];
+        if (!string.IsNullOrWhiteSpace(adminEmail) &&
+            string.Equals(Input.Email, adminEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            await UserManager.AddToRolesAsync(user, AppRoles.All);
+            Logger.LogInformation("'{Email}' registered and elevated to admin roles.", adminEmail);
         }
 
         Logger.LogInformation("User created a new account with password.");

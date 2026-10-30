@@ -1,0 +1,64 @@
+@page "/admin/roles"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "admin")]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using BlazeTAK.Data
+@using BlazeTAK.Data.Models
+@using BlazeTAK.Services
+
+@inject ApplicationDbContext DbContext
+
+<PageTitle>Roles</PageTitle>
+
+<div class="container mt-3" style="max-width: 50rem;">
+    <h2><i class="bi bi-person-badge"></i> Roles</h2>
+    @if (_isLoading)
+    {
+        <div class="text-center my-5"><div class="spinner-border"></div></div>
+    }
+    else
+    {
+        @foreach (var role in _roles)
+        {
+            <div class="card mb-3 shadow-sm">
+                <div class="card-header"><strong>@role.Name</strong> <span class="badge bg-secondary">@role.Users.Count</span></div>
+                <div class="card-body py-2">
+                    @if (role.Users.Count == 0)
+                    {
+                        <span class="text-muted fst-italic">no users</span>
+                    }
+                    else
+                    {
+                        <ul class="mb-0">
+                            @foreach (var email in role.Users)
+                            {
+                                <li>@email</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private sealed record RoleView(string Name, List<string> Users);
+
+    private List<RoleView> _roles = new();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var roles = await DbContext.Roles.Select(r => new { r.Id, Name = r.Name! }).ToListAsync();
+        var userRoles = await DbContext.UserRoles
+            .Join(DbContext.Users, ur => ur.UserId, u => u.Id, (ur, u) => new { ur.RoleId, Email = u.Email! })
+            .ToListAsync();
+
+        _roles = roles.Select(r => new RoleView(r.Name,
+            userRoles.Where(x => x.RoleId == r.Id).Select(x => x.Email).ToList())).ToList();
+        _isLoading = false;
+    }
+}

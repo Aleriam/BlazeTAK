@@ -1,0 +1,642 @@
+@page "/chat"
+@rendermode InteractiveWebAssembly
+@attribute [Authorize]
+@using BlazeTAK.Client.Models
+@using BlazeTAK.Client.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@inject ChatService ChatService
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<PageTitle>Chat</PageTitle>
+
+<div class="container-fluid p-3" style="height: calc(100vh - 3.5rem);">
+    @if (_error != null)
+    {
+        <div class="alert alert-danger alert-dismissible py-1 px-2 small" role="alert">
+            @_error
+            <button type="button" class="btn-close btn-sm float-end" @onclick="() => _error = null"></button>
+        </div>
+    }
+
+    <div class="row g-3" style="height: calc(100% - 3.2rem);">
+        @* left column: identity switch + chats + actions *@
+        <div class="col-lg-3 col-md-4 h-100 d-flex flex-column">
+
+            @* identity switcher: filters chats (only chats where the identity is member)
+               and defines the sender callsign of outgoing messages.
+               Blazor-managed toggle (no bootstrap JS dropdown - those don't fire under WASM) *@
+            <label class="form-label small text-muted mb-1">Acting as (identity)</label>
+            <div class="mb-2">
+                <button type="button" class="btn btn-outline-primary w-100 d-flex justify-content-between align-items-center"
+                        @onclick="ToggleIdentityMenuAsync">
+                    <span class="text-truncate">
+                        <i class="bi bi-person-badge me-1"></i>
+                        <strong>@(_selectedIdentity == null ? "-" : FormatCallsign(_selectedIdentity))</strong>
+                        <span class="text-muted ms-1">@KindLabel(_selectedIdentity?.Kind)</span>
+                    </span>
+                    <i class="bi @(_showIdentityMenu ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                </button>
+
+                <div class="position-relative">
+                    @if (_showIdentityMenu)
+                    {
+                        <div class="list-group shadow position-absolute w-100 mt-1" style="z-index: 1050;">
+                            @foreach (var identity in _identities)
+                            {
+                                <button type="button"
+                                        class="list-group-item list-group-item-action @(_selectedIdentity?.ID == identity.ID ? "active" : "") py-1 px-2"
+                                        @onclick="() => SelectIdentityAsync(identity)">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="text-truncate">
+                                            <small>@FormatCallsign(identity)</small>
+                                            <span class="text-muted ms-1 small">@KindLabel(identity.Kind)</span>
+                                        </span>
+                                        @if (!identity.CanSend)
+                                        {
+                                            <span class="badge bg-warning text-dark" title="receive only">read</span>
+                                        }
+                                    </div>
+                                </button>
+                            }
+                            @if (_identities.Count == 0)
+                            {
+                                <div class="list-group-item text-muted fst-italic small">No identities</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0 text-muted">Chats</h6>
+                <button type="button" class="btn btn-sm btn-primary" @onclick="OpenNewChatModalAsync"
+                        disabled="@(_selectedIdentity == null || !IsReady)">
+                    <i class="bi bi-plus-lg"></i> New chat
+                </button>
+            </div>
+
+            @if (!IsReady)
+            {
+                <div class="text-center my-4">
+                    <div class="spinner-border"></div>
+                    <div class="small text-muted mt-1">@(_error != null ? "failed - see above" : "connecting...")</div>
+                </div>
+            }
+
+            <div class="list-group overflow-auto flex-grow-1">
+                @if (IsReady)
+                {
+                    @foreach (var chat in _chats)
+                    {
+                        <button type="button" class="list-group-item list-group-item-action @(_selectedChatID == chat.ID ? "active" : "")"
+                                @onclick="() => SelectChatAsync(chat)">
+                            <i class="bi bi-chat me-1"></i><span class="text-truncate d-inline-block" style="max-width: 10rem;">@chat.Name</span>
+                        </button>
+                    }
+                    @if (_chats.Count == 0)
+                    {
+                        <div class="text-muted fst-italic small p-2">
+                            No chats for this identity yet - create one or wait to be added.
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* right column: large chat window *@
+        <div class="col h-100">
+            <div class="card h-100 d-flex flex-column">
+                @if (_selectedChatID == null)
+                {
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                        <i class="bi bi-chat-dots" style="font-size: 3rem;"></i>
+                        <div class="mt-2">Select a chat on the left, or create a new one.</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="text-truncate">
+                            <i class="bi bi-people-fill me-1"></i>
+                            <strong>@_selectedChatName</strong>
+                        </div>
+                        <span class="badge @(_canSendHere ? "bg-success" : "bg-warning text-dark")">
+                            @if (_canSendHere && _selectedIdentity != null)
+                            {
+                                <text>sending as @FormatCallsign(_selectedIdentity)</text>
+                            }
+                            else
+                            {
+                                <text>receive only for this identity</text>
+                            }
+                        </span>
+                    </div>
+
+                    <div class="card-body overflow-auto flex-grow-1" id="chat-scroll">
+                        @foreach (var message in _messages)
+                        {
+                            var mine = message.SenderID != Guid.Empty && _identities.Any(i => i.ID == message.SenderID);
+                            <div class="d-flex mb-2 @(mine ? "justify-content-end" : "justify-content-start")">
+                                <div class="@(mine ? "bg-primary text-white" : "bg-light text-dark") rounded-3 px-3 py-2 shadow-sm" style="max-width: 75%;">
+                                    <div class="small fw-bold @(mine ? "text-white-50" : "text-muted")">@message.SenderCallSign</div>
+                                    <div class="text-break d-flex align-items-end gap-2">
+                                        <span>@message.Message</span>
+                                        @if (mine)
+                                        {
+                                            <button type="button" title="delete message" @onclick="() => DeleteMessageAsync(message)"
+                                                    class="btn btn-sm p-0 @(mine ? "text-white-50" : "text-muted")" style="line-height: 1;">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                    <div class="d-flex justify-content-end opacity-75" style="font-size: .65rem;">
+                                        @message.SentUtc.ToLocalTime().ToString("HH:mm")
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        @if (_messages.Count == 0)
+                        {
+                            <div class="text-center text-muted fst-italic mt-4">No messages yet</div>
+                        }
+                    </div>
+
+                    <div class="card-footer">
+                        @if (_canSendHere && _selectedIdentity != null)
+                        {
+                            <div class="input-group">
+                                <span class="input-group-text" title="sender identity" style="max-width: 9rem;">
+                                    <i class="bi bi-person-badge"></i>&nbsp;@FormatCallsign(_selectedIdentity)
+                                </span>
+                                <input class="form-control" @bind="_draft" @bind:event="oninput"
+                                       @onkeydown="OnKeyDown" placeholder="Message as @FormatCallsign(_selectedIdentity)..." />
+                                <button type="button" class="btn btn-primary" @onclick="SendAsync"
+                                        disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))">
+                                    @if (_sending)
+                                    {
+                                        <span class="spinner-border spinner-border-sm"></span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-send"></i>
+                                    }
+                                    Send
+                                </button>
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted fst-italic">
+                                You cannot send in this chat with the selected identity (only chat members can).
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ------- new chat modal (overlay) ------- *@
+@if (_showNewChatModal)
+{
+    <div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+         style="background: rgba(0,0,0,.5); z-index: 2000;" @onclick="CloseNewChatModal">
+        <div class="card shadow-lg" style="width: 32rem; max-height: 85vh;" @onclick:stopPropagation>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-plus-circle"></i> Create new chat</strong>
+                <button type="button" class="btn-close" @onclick="CloseNewChatModal"></button>
+            </div>
+            <div class="card-body overflow-auto">
+                <div class="mb-3">
+                    <label class="form-label">Chat name *</label>
+                    <input class="form-control" @bind="_newChatName" placeholder="e.g. Operation planning" />
+                </div>
+
+                @* member picker: any entities (users/units/groups) mixed; switch lists by tab *@
+                <ul class="nav nav-tabs mb-2">
+                    <li class="nav-item"><button type="button" class="nav-link @(_pickerKind == ChannelKind.Personal ? "active" : "")" @onclick="() => _pickerKind = ChannelKind.Personal">Users</button></li>
+                    <li class="nav-item"><button type="button" class="nav-link @(_pickerKind == ChannelKind.Unit ? "active" : "")" @onclick="() => _pickerKind = ChannelKind.Unit">Units</button></li>
+                    <li class="nav-item"><button type="button" class="nav-link @(_pickerKind == ChannelKind.Group ? "active" : "")" @onclick="() => _pickerKind = ChannelKind.Group">Groups</button></li>
+                </ul>
+
+                <div class="list-group" style="max-height: 14rem; overflow: auto;">
+                    @foreach (var entry in _directory.Where(d => d.Kind == _pickerKind).OrderBy(d => d.CallSign))
+                    {
+                        <label class="list-group-item d-flex align-items-center">
+                            <input type="checkbox" class="form-check-input me-2" @bind="@entry.Selected" />
+                            <span>
+                                <strong>@entry.CallSign-@entry.CallSignNumber</strong>
+                                <small class="text-muted ms-1">@entry.Name</small>
+                            </span>
+                        </label>
+                    }
+                    @if (!_directory.Any(d => d.Kind == _pickerKind))
+                    {
+                        <div class="text-muted fst-italic small p-2">Nothing available.</div>
+                    }
+                </div>
+                <div class="text-muted small mt-1">@($"{_directory.Count(d => d.Selected)} selected")</div>
+            </div>
+            <div class="card-footer d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseNewChatModal">Cancel</button>
+                <button type="button" class="btn btn-primary" @onclick="CreateChatAsync"
+                        disabled="@(_creating || string.IsNullOrWhiteSpace(_newChatName))">
+                    @if (_creating)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1"></span>
+                    }
+                    <i class="bi bi-check-lg"></i> Create chat
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ChannelDto> _identities = new();
+    private ChannelDto? _selectedIdentity;
+    private bool _showIdentityMenu;
+
+    private List<ChatSummaryDto> _chats = new();
+    private Guid? _selectedChatID;
+    private string _selectedChatName = string.Empty;
+    private List<MessageChatDto> _messages = new();
+    private List<Guid> _allowedIdentityIDs = new();
+    private string? _draft;
+    private string? _error;
+    private bool _isLoading = true;
+    private bool _sending;
+    private IJSObjectReference? _jsModule;
+
+    //new chat modal state
+    private bool _showNewChatModal;
+    private bool _creating;
+    private string _newChatName = string.Empty;
+    private ChannelKind _pickerKind = ChannelKind.Personal;
+    private List<DirectoryEntryDto> _directory = new();
+
+    private bool IsBrowser => OperatingSystem.IsBrowser();
+
+    //ready once initial load finished with a connected hub
+    private bool IsReady => IsBrowser && !_isLoading && ChatService.State == HubConnectionState.Connected;
+
+    private bool _canSendHere =>
+        _selectedChatID != null && _selectedIdentity != null
+        && _allowedIdentityIDs.Contains(_selectedIdentity.ID) && IsReady && !_sending;
+
+    private string KindLabel(ChannelKind? kind) => kind switch
+    {
+        ChannelKind.Personal => "user",
+        ChannelKind.Unit => "unit",
+        ChannelKind.Group => "group",
+        _ => ""
+    };
+
+    private static string FormatCallsign(ChannelDto identity)
+        => string.IsNullOrWhiteSpace(identity.CallSign) ? $"#{identity.CallSignNumber}"
+            : $"{identity.CallSign}-{identity.CallSignNumber}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!IsBrowser) return; //static prerender on the server - nothing to do
+
+        ChatService.MessageReceived += OnMessageReceived;
+        ChatService.MessagesDeleted += OnMessagesDeleted;
+        ChatService.ChatDeleted += OnChatDeleted;
+        ChatService.ChatsUpdated += OnChatsUpdated;
+        ChatService.Reconnected += OnReconnected;
+
+        try
+        {
+            await ChatService.StartAsync();
+            await ReloadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    //------- data loading (single-flight: concurrent event reloads collapse into one)-------
+
+    private int _loadingInProgress;
+
+    private async Task ReloadAllAsync()
+    {
+        if (Interlocked.Exchange(ref _loadingInProgress, 1) == 1)
+            return; //a reload is already running; its result is used by everyone
+        try
+        {
+            await DoReloadAsync();
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _loadingInProgress, 0);
+        }
+    }
+
+    private async Task DoReloadAsync()
+    {
+        _identities = await ChatService.GetMyIdentitiesAsync();
+
+        //keep selection; fall back to first identity
+        _selectedIdentity = _identities.FirstOrDefault(i => _selectedIdentity != null && i.ID == _selectedIdentity.ID)
+                            ?? _identities.FirstOrDefault();
+
+        _chats = _selectedIdentity == null
+            ? new List<ChatSummaryDto>()
+            : await ChatService.GetMyChatsAsync(_selectedIdentity.ID);
+
+        //make sure the signalr groups are joined (idempotent server-side; validates access)
+        await ChatService.SubscribeToNewChatsAsync(_chats.Select(c => c.ID));
+
+        if (_selectedChatID.HasValue && _chats.All(c => c.ID != _selectedChatID.Value))
+        {
+            _selectedChatID = null;
+            _messages.Clear();
+        }
+        _error = null;
+    }
+
+    //------- hub events (dispatched via InvokeAsync, entry uses debounce)-------
+
+    private bool _reloadPending;
+
+    private void OnChatsUpdated()
+    {
+        //ChatsUpdated storms (creator + members get events at once) - coalesce within 250ms
+        if (_reloadPending) return;
+        _reloadPending = true;
+        _ = SafeDispatchAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(250);
+                await ReloadAllAsync();
+            }
+            finally
+            {
+                _reloadPending = false;
+            }
+            StateHasChanged();
+        });
+    }
+
+    private async void OnReconnected()
+    {
+        if (!IsBrowser) return;
+        //after reconnect: state reload (re-subscribes the identity view's chat groups)
+        await SafeDispatchAsync(async () =>
+        {
+            await ReloadAllAsync();
+            if (_selectedChatID != null)
+                await ChatService.SubscribeToNewChatsAsync(new[] { _selectedChatID.Value });
+            StateHasChanged();
+        });
+    }
+
+    private void OnMessageReceived(MessageChatDto dto)
+    {
+        if (!IsBrowser || _selectedChatID != dto.ChannelID) return;
+        _ = SafeDispatchAsync(async () =>
+        {
+            if (!_messages.Any(m => m.SentUtc == dto.SentUtc && m.Message == dto.Message))
+                _messages.Add(dto);
+            StateHasChanged();
+            await ScrollToBottomAsync();
+        });
+    }
+
+    private void OnMessagesDeleted(MessageChatDto dto)
+    {
+        //content-based matching: every equal message of that identity disappears
+        if (!IsBrowser || _selectedChatID == null) return;
+        _ = SafeDispatchAsync(() =>
+        {
+            _messages.RemoveAll(m => m.SenderID == dto.SenderID && m.Message == dto.Message && m.SentUtc == dto.SentUtc);
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
+    }
+
+    private void OnChatDeleted(Guid chatID)
+    {
+        if (!IsBrowser || _selectedChatID != chatID) return;
+        _ = SafeDispatchAsync(() =>
+        {
+            _selectedChatID = null;
+            _selectedChatName = string.Empty;
+            _messages.Clear();
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
+    }
+
+    //runs on the hub/dispatch thread - shifted to the render context; exceptions become _error
+    private async Task SafeDispatchAsync(Func<Task> work)
+    {
+        try
+        {
+            await InvokeAsync(work);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    //------- selection-------
+
+    private void ToggleIdentityMenuAsync()
+    {
+        _showIdentityMenu = !_showIdentityMenu;
+        StateHasChanged();
+    }
+
+    private async Task SelectIdentityAsync(ChannelDto identity)
+    {
+        _showIdentityMenu = false;
+        try
+        {
+            _selectedIdentity = identity;
+            _selectedChatID = null;
+            _messages.Clear();
+            _allowedIdentityIDs = new List<Guid>();
+            await ReloadAllAsync();
+            var first = _chats.FirstOrDefault();
+            if (first != null) await SelectChatAsync(first);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Switching identity failed: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    private async Task SelectChatAsync(ChatSummaryDto chat)
+    {
+        try
+        {
+            var full = await ChatService.GetChatAsync(chat.ID);
+            _selectedChatID = full.ID;
+            _selectedChatName = full.Name;
+            _messages = full.Messages;
+            _allowedIdentityIDs = full.AllowedIdentityIDs;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        StateHasChanged();
+        await ScrollToBottomAsync();
+    }
+
+    //------- new chat modal-------
+
+    private async Task OpenNewChatModalAsync()
+    {
+        try
+        {
+            _directory = await ChatService.GetDirectoryAsync();
+            _newChatName = string.Empty;
+            _pickerKind = ChannelKind.Personal;
+            _showNewChatModal = true;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        StateHasChanged();
+    }
+
+    private void CloseNewChatModal() => _showNewChatModal = false;
+
+    private async Task CreateChatAsync()
+    {
+        var members = _directory.Where(d => d.Selected).Select(d => d.ID).ToList();
+        var name = _newChatName.Trim();
+        var currentIdentityID = _selectedIdentity?.ID;
+        _creating = true;
+        try
+        {
+            var chatID = await ChatService.CreateChatAsync(name, members);
+            _showNewChatModal = false;
+            _directory.Clear();
+
+            //the creator always participates personally; the reload via ChatsUpdated also happens
+            await ReloadAllAsync();
+
+            var created = _chats.FirstOrDefault(c => c.ID == chatID);
+            if (created == null && currentIdentityID.HasValue)
+            {
+                //not visible under the current identity - switch to personal identity, creator is member there
+                var personal = _identities.FirstOrDefault(i => i.Kind == ChannelKind.Personal);
+                if (personal != null)
+                {
+                    _selectedIdentity = personal;
+                    await ReloadAllAsync();
+                    created = _chats.FirstOrDefault(c => c.ID == chatID);
+                }
+            }
+            if (created != null) await SelectChatAsync(created);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to create chat: {ex.Message}";
+        }
+        finally
+        {
+            _creating = false;
+            StateHasChanged();
+        }
+    }
+
+    //------- messaging-------
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") _ = SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        if (!_canSendHere || _selectedChatID == null || _selectedIdentity == null) return;
+        var text = _draft!;
+        var chatID = _selectedChatID.Value;
+        var identityID = _selectedIdentity.ID;
+        _draft = null;
+        _sending = true;
+        try
+        {
+            await ChatService.SendAsync(chatID, identityID, text);
+            //make sure our connection is in the chat group (idempotent) so the echo arrives
+            await ChatService.SubscribeToNewChatsAsync(new[] { chatID });
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _draft = text; //restore draft on failure
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+            await ScrollToBottomAsync();
+        }
+    }
+
+    private async Task DeleteMessageAsync(MessageChatDto message)
+    {
+        if (_selectedChatID == null) return;
+        try
+        {
+            await ChatService.DeleteMessageAsync(_selectedChatID.Value, message);
+            //remove everywhere (also from other identities' views) - local update comes via event
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        if (!IsBrowser) return;
+        try
+        {
+            _jsModule ??= await JSRuntime.InvokeAsync<IJSObjectReference>("import", "./js/chat.js");
+            await _jsModule.InvokeVoidAsync("scrollToBottom", "chat-scroll");
+        }
+        catch (Exception)
+        {
+            // js module missing - non critical
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        //only event handlers and the js module - the ChatService is an app-wide singleton
+        //and MUST keep its connection alive for other pages / future visits
+        ChatService.MessageReceived -= OnMessageReceived;
+        ChatService.MessagesDeleted -= OnMessagesDeleted;
+        ChatService.ChatDeleted -= OnChatDeleted;
+        ChatService.ChatsUpdated -= OnChatsUpdated;
+        ChatService.Reconnected -= OnReconnected;
+
+        if (_jsModule != null)
+        {
+            try { await _jsModule.DisposeAsync(); } catch { /* ignore */ }
+            _jsModule = null;
+        }
+    }
+}
