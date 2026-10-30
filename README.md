@@ -1,7 +1,11 @@
 # <p align="center"><img src="BlazeTAK/BlazeTAK/wwwroot/blazetak-logo.png" alt="BlazeTAK Logo" width="120" /><br><code>BLAZE•TAK</code></p>
 
 <p align="center">
-  <strong>🔥 High-Performance Real-Time Tactical Awareness Kit (TAK) Web Platform 🔥</strong>
+  <strong>🔥 The Open-Source TAK Replacement Built for Airsoft &amp; MilSim 🔥</strong>
+</p>
+
+<p align="center">
+  <em>A free, self-hosted Team Awareness Kit platform giving tactical teams real-time shared maps, GPS tracking, and MIL-STD-2525 symbology — right in the browser.</em>
 </p>
 
 <p align="center">
@@ -21,7 +25,14 @@
 
 ## 🛰️ Overview
 
-**BlazeTAK** is a lightweight, ultra-responsive web-based Tactical Assault Kit / Team Awareness Kit (TAK) client and server ecosystem. Designed for distributed field operations, command post monitoring, and team geospatial coordination, BlazeTAK delivers sub-second situational awareness directly in the browser without requiring native client installations.
+**BlazeTAK** is a free and open-source alternative to the TAK ecosystem (ATAK, WinTAK, iTAK, CivTAK). It is designed and built for **airsoft, milsim, and airsoft-adjacent tactical communities** — game organizers, squad leaders, and players who want real map-based team coordination without proprietary software, locked-down ecosystems, or native client installations.
+
+All you need is a browser. Players throw a web page open on their phone, share their GPS, see teammates and objectives on the map, and coordinate in real time — while admins run the whole thing from a single self-hosted server they fully control.
+
+- 🎯 **Made for airsoft & milsim:** purpose-built for the demands of weekend events, 24h milsim operations, and year-round clubs — not defense contracting.
+- 🕸️ **Zero-install client:** nothing to side-load or activate; the tactical map is a web app.
+- 🏠 **Self-hosted & air-gap friendly:** run it on cheap cloud infrastructure, a NAS at the game field, or an offline field server during games — your operational data never leaves hardware you own.
+- 🆓 **Open source:** no license keys, no subscriptions, no telemetry. Community contributions welcome.
 
 Engineered with high-contrast, low-light tactical UI principles (`#000000` pitch black, `#ff5521` blaze orange, and `#2d4fad` tactical blue), BlazeTAK is optimized for both tactical monitors and mobile field terminals.
 
@@ -81,6 +92,20 @@ Engineered with high-contrast, low-light tactical UI principles (`#000000` pitch
     </tr>
   </tbody>
 </table>
+
+---
+
+## 🎖️ Built for Airsoft & MilSim
+
+| Use case | How BlazeTAK helps |
+| :--- | :--- |
+| **Event command & control** | Game admins track objectives, spawn points, and unit positions live from a single dashboard — no more radio confusion about "who is where." |
+| **Squad coordination** | Players see their own squad on the map in real time, mark contacts (hostile) or rally points (friendly), and stay oriented on large event sites. |
+| **24h+ milsim operations** | Multi-day events benefit from persistent markers, group channels, and breadcrumb tracking to literally watch the battle lines move overnight. Isolated tactical nets keep intel compartmentalized between factions. |
+| **Pre-planned scenario briefings** | Place persistent POIs, objectives, and boundaries before the event so every player loads in with the same shared operational picture. |
+| **Club & community infrastructure** | Run your own tactical server year-round for your club. Free open-source software, plain HTML/JS interop, and standard hardware are all you need. |
+
+> ⚠️ **Safety first:** BlazeTAK is a game-support tool for airsoft and milsim. It is *not* certified for real-world military, SAR, or emergency use, and GPS sharing only works within network coverage of your server.
 
 ---
 
@@ -211,10 +236,24 @@ BlazeTAK/
 
 ---
 
+## 🤝 Contributing
+
+BlazeTAK is an open-source community project for the airsoft &amp; milsim community. Contributions are welcome:
+
+1. Fork the repository and create a feature branch.
+2. Implement your change (with tests in `BlazeTAK.Tests/` where practical).
+3. Open a pull request describing the tactical problem you're solving.
+
+Bug reports, event feedback from the field, and feature requests are equally valuable — if something breaks mid-game, we want to know.
+
+---
+
 ## 📄 License
 
-This project is distributed under the standard open-source license. See `LICENSE` for details.
+This project is licensed as open source. *(A `LICENSE` file is not yet present in the repository — see open issue on licensing.)*
+
+---
 
 <p align="center">
-  <sub>Designed & Developed for Tactical Clarity & Speed with BlazeTAK</sub>
+  <sub>BlazeTAK — real-time tactical awareness for airsoft &amp; milsim teams. Stay oriented. 🔥</sub>
 </p>
