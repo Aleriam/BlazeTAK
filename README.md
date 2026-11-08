@@ -142,6 +142,7 @@ BlazeTAK adheres strictly to the **Tactical High-Contrast Dark** specification:
 - **Database:** [PostgreSQL 16](https://www.postgresql.org/) with [PostGIS](https://postgis.net/) Spatial Extension
 - **ORM:** [Entity Framework Core 10](https://learn.microsoft.com/ef/core/) (Npgsql.EntityFrameworkCore.PostgreSQL.NetTopologySuite)
 - **Styling:** Custom Tactical Dark Theme & [Bootstrap 5](https://getbootstrap.com/)
+- **Icons:** [Icons8](https://icons8.com/) — [crosshair icon set](https://icons8.com/icons/set/crosshair-map) and other icon assets used throughout the UI.
 - **Containerization:** [Docker](https://www.docker.com/) & [Docker Compose](https://docs.docker.com/compose/)
 
 ---

@@ -35,6 +35,7 @@
     margin-right: 0.75rem;
     top: -1px;
     background-size: cover;
+    object-fit: contain;
 }
 
 .bi-house-door-fill-nav-menu {

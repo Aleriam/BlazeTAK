@@ -4,12 +4,14 @@
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
 @using BlazeTAK.Data
+@using BlazeTAK.Services
 
 @inject UserManager<ApplicationUser> UserManager
 @inject SignInManager<ApplicationUser> SignInManager
 @inject ILogger<Login> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject ITrafficTracker TrafficTracker
 
 <PageTitle>Log in</PageTitle>
 
@@ -123,22 +125,26 @@
 
         if (result.Succeeded)
         {
+            TrafficTracker.RecordLoginAttempt(Input.Email, success: true, detail: "Password/Passkey login successful");
             Logger.LogInformation("User logged in.");
             RedirectManager.RedirectTo(ReturnUrl);
         }
         else if (result.RequiresTwoFactor)
         {
+            TrafficTracker.RecordLoginAttempt(Input.Email, success: true, detail: "Requires 2FA verification");
             RedirectManager.RedirectTo(
                 "Account/LoginWith2fa",
                 new() { ["returnUrl"] = ReturnUrl, ["rememberMe"] = Input.RememberMe });
         }
         else if (result.IsLockedOut)
         {
+            TrafficTracker.RecordLoginAttempt(Input.Email, success: false, detail: "Account locked out");
             Logger.LogWarning("User account locked out.");
             RedirectManager.RedirectTo("Account/Lockout");
         }
         else
         {
+            TrafficTracker.RecordLoginAttempt(Input.Email, success: false, detail: "Invalid password or credentials");
             errorMessage = "Error: Invalid login attempt.";
         }
     }
