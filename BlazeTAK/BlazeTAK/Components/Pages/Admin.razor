@@ -1,0 +1,659 @@
+@page "/admin"
+@page "/admin/dashboard"
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = AppRoles.Admin)]
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using BlazeTAK.Data
+@using BlazeTAK.Data.Models
+@using BlazeTAK.Services
+
+@inject ApplicationDbContext DbContext
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject IRegistrationService RegistrationService
+@inject ITrafficTracker TrafficTracker
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+
+<PageTitle>Admin Dashboard</PageTitle>
+
+<div class="container-fluid mt-3 pb-5">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h2><i class="bi bi-shield-lock-fill text-danger me-2"></i> Admin Dashboard</h2>
+            <p class="text-muted mb-0">System administration, user management, registration controls, and traffic analytics</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshDataAsync">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh Data
+            </button>
+            <a href="admin/roles" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-person-badge me-1"></i> Role Directory
+            </a>
+            <a href="groups" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-diagram-3 me-1"></i> Groups & Units
+            </a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <div class="alert @_statusMessageClass alert-dismissible fade show" role="alert">
+            <i class="bi @(_statusMessageClass.Contains("danger") ? "bi-exclamation-triangle-fill" : "bi-check-circle-fill") me-2"></i>
+            @_statusMessage
+            <button type="button" class="btn-close" @onclick="() => _statusMessage = null" aria-label="Close"></button>
+        </div>
+    }
+
+    <!-- Top KPI Cards -->
+    <div class="row g-3 mb-4">
+        <!-- Registration Toggle Card -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card h-100 shadow-sm border-0 bg-dark text-light">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted text-uppercase fw-semibold small">Registration</span>
+                        @if (RegistrationService.IsRegistrationEnabled)
+                        {
+                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i> OPEN</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger"><i class="bi bi-slash-circle me-1"></i> CLOSED</span>
+                        }
+                    </div>
+                    <div>
+                        <h4 class="mb-2">@(RegistrationService.IsRegistrationEnabled ? "Active & Open" : "Disabled")</h4>
+                        <p class="text-muted small mb-3">
+                            @(RegistrationService.IsRegistrationEnabled
+                                ? "New users are permitted to register accounts."
+                                : "Registration form is locked for new users.")
+                        </p>
+                    </div>
+                    <div>
+                        <button class="btn @(RegistrationService.IsRegistrationEnabled ? "btn-outline-warning" : "btn-success") btn-sm w-100 fw-bold"
+                                @onclick="ToggleRegistration">
+                            <i class="bi @(RegistrationService.IsRegistrationEnabled ? "bi-toggle-on" : "bi-toggle-off") me-1"></i>
+                            @(RegistrationService.IsRegistrationEnabled ? "Turn OFF Registration" : "Turn ON Registration")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Users Online Card -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card h-100 shadow-sm border-0 bg-dark text-light">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted text-uppercase fw-semibold small">Active Users</span>
+                        <i class="bi bi-people-fill text-info fs-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="mb-1 text-info">@_trafficStats.CurrentlyActiveUsers</h3>
+                        <p class="text-muted small mb-0">Distinct active users in last 15 min</p>
+                    </div>
+                    <div class="mt-3 pt-2 border-top border-secondary">
+                        <small class="text-muted">Total Registered Accounts: <strong class="text-light">@_users.Count</strong></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logins (24h) Card -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card h-100 shadow-sm border-0 bg-dark text-light">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted text-uppercase fw-semibold small">Logins (24h)</span>
+                        <i class="bi bi-box-arrow-in-right text-success fs-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="mb-1 text-success">@_trafficStats.TotalSuccessfulLogins24H</h3>
+                        <p class="text-muted small mb-0">Successful user authentications</p>
+                    </div>
+                    <div class="mt-3 pt-2 border-top border-secondary d-flex justify-content-between">
+                        <small class="text-muted">Failed Attempts:</small>
+                        <span class="badge @(_trafficStats.TotalFailedLogins24H > 0 ? "bg-warning text-dark" : "bg-secondary")">
+                            @_trafficStats.TotalFailedLogins24H
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Server Traffic / Requests Card -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card h-100 shadow-sm border-0 bg-dark text-light">
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted text-uppercase fw-semibold small">Server Traffic</span>
+                        <i class="bi bi-activity text-primary fs-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="mb-1 text-primary">@_trafficStats.TotalRequests24H</h3>
+                        <p class="text-muted small mb-0">HTTP & API requests (24h)</p>
+                    </div>
+                    <div class="mt-3 pt-2 border-top border-secondary">
+                        <small class="text-muted">Status: <span class="badge bg-success">Operational</span></small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Traffic Graph Section -->
+    <div class="card shadow-sm border-0 mb-4 bg-dark text-light">
+        <div class="card-header bg-dark border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-graph-up-arrow text-primary fs-5"></i>
+                <h5 class="mb-0">Server Traffic & Authentication Graph</h5>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn @(_timeframeHours == 24 ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetTimeframe(24)">24 Hours</button>
+                    <button type="button" class="btn @(_timeframeHours == 12 ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetTimeframe(12)">12 Hours</button>
+                    <button type="button" class="btn @(_timeframeHours == 1 ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SetTimeframe(1)">1 Hour</button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Chart Legend -->
+            <div class="d-flex flex-wrap gap-4 mb-3 small">
+                <div class="d-flex align-items-center gap-2">
+                    <span style="display:inline-block; width:14px; height:14px; background-color:#0d6efd; border-radius:3px;"></span>
+                    <span>Server Requests</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span style="display:inline-block; width:14px; height:14px; background-color:#198754; border-radius:3px;"></span>
+                    <span>Successful Logins</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span style="display:inline-block; width:14px; height:14px; background-color:#dc3545; border-radius:3px;"></span>
+                    <span>Failed Login Attempts</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span style="display:inline-block; width:14px; height:14px; background-color:#0dcaf0; border-radius:3px;"></span>
+                    <span>Active Users</span>
+                </div>
+            </div>
+
+            <!-- SVG Graph -->
+            <div style="width:100%; height:260px; overflow-x:auto;">
+                <svg viewBox="0 0 900 240" style="width:100%; height:100%; min-width:600px; font-family:sans-serif;" aria-label="Server Traffic Chart">
+                    <!-- Background Grid -->
+                    <defs>
+                        <linearGradient id="reqGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#0d6efd" stop-opacity="0.4" />
+                            <stop offset="100%" stop-color="#0d6efd" stop-opacity="0.05" />
+                        </linearGradient>
+                    </defs>
+
+                    <!-- Horizontal Grid lines -->
+                    @for (int g = 0; g <= 4; g++)
+                    {
+                        var y = 200 - (g * 40);
+                        var val = (_maxGraphValue / 4.0) * g;
+                        <line x1="60" y1="@y" x2="880" y2="@y" stroke="#333333" stroke-dasharray="4,4" stroke-width="1" />
+                        @((MarkupString)$"<text x=\"50\" y=\"{y + 4}\" fill=\"#888888\" font-size=\"11\" text-anchor=\"end\">{(int)Math.Ceiling(val)}</text>")
+                    }
+
+                    <!-- Bottom baseline -->
+                    <line x1="60" y1="200" x2="880" y2="200" stroke="#555555" stroke-width="1.5" />
+
+                    @if (_trafficStats.History.Count > 0)
+                    {
+                        var count = _trafficStats.History.Count;
+                        var colWidth = (820.0 / count);
+
+                        <!-- Render Bars and Data Points -->
+                        @for (int i = 0; i < count; i++)
+                        {
+                            var pt = _trafficStats.History[i];
+                            var xCenter = 60 + (i * colWidth) + (colWidth / 2);
+                            var barW = Math.Max(6, colWidth * 0.18);
+
+                            // Calculate heights based on _maxGraphValue
+                            var maxVal = Math.Max(1.0, _maxGraphValue);
+
+                            var hReq = (pt.Requests / maxVal) * 160.0;
+                            var yReq = 200 - hReq;
+
+                            var hSuccess = (pt.SuccessfulLogins / maxVal) * 160.0;
+                            var ySuccess = 200 - hSuccess;
+
+                            var hFail = (pt.FailedLoginAttempts / maxVal) * 160.0;
+                            var yFail = 200 - hFail;
+
+                            var hActive = (pt.ActiveUsers / maxVal) * 160.0;
+                            var yActive = 200 - hActive;
+
+                            <!-- Server Requests Bar -->
+                            <rect x="@(xCenter - (barW * 1.8))" y="@yReq" width="@barW" height="@Math.Max(2, hReq)" fill="#0d6efd" rx="2">
+                                <title>Requests: @pt.Requests at @pt.Timestamp.ToString("HH:mm")</title>
+                            </rect>
+
+                            <!-- Successful Logins Bar -->
+                            <rect x="@(xCenter - (barW * 0.6))" y="@ySuccess" width="@barW" height="@Math.Max(2, hSuccess)" fill="#198754" rx="2">
+                                <title>Successful Logins: @pt.SuccessfulLogins at @pt.Timestamp.ToString("HH:mm")</title>
+                            </rect>
+
+                            <!-- Failed Logins Bar -->
+                            <rect x="@(xCenter + (barW * 0.6))" y="@yFail" width="@barW" height="@Math.Max(2, hFail)" fill="#dc3545" rx="2">
+                                <title>Failed Attempts: @pt.FailedLoginAttempts at @pt.Timestamp.ToString("HH:mm")</title>
+                            </rect>
+
+                            <!-- Active Users Dot / Line Indicator -->
+                            <circle cx="@xCenter" cy="@yActive" r="4" fill="#0dcaf0" stroke="#111111" stroke-width="1.5">
+                                <title>Active Users: @pt.ActiveUsers at @pt.Timestamp.ToString("HH:mm")</title>
+                            </circle>
+
+                            <!-- X Axis Time Label -->
+                            @((MarkupString)$"<text x=\"{xCenter}\" y=\"218\" fill=\"#aaaaaa\" font-size=\"10\" text-anchor=\"middle\">{pt.Timestamp:HH:mm}</text>")
+                        }
+                    }
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Management Table -->
+    <div class="card shadow-sm border-0 bg-dark text-light">
+        <div class="card-header bg-dark border-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-people-fill text-info fs-5"></i>
+                <h5 class="mb-0">User Accounts Management</h5>
+                <span class="badge bg-secondary ms-2">@_filteredUsers.Count</span>
+            </div>
+            <div class="d-flex align-items-center gap-2" style="max-width: 320px; width: 100%;">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-secondary border-secondary text-light"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control bg-dark text-light border-secondary"
+                           placeholder="Filter by email or callsign..."
+                           @bind="_searchQuery" @bind:event="oninput" />
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            @if (_isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Loading registered users...</p>
+                </div>
+            }
+            else if (_filteredUsers.Count == 0)
+            {
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-person-x fs-1 d-block mb-2"></i>
+                    No users found matching your search criteria.
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover align-middle mb-0">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>User / Email</th>
+                                <th>Profile & Callsign</th>
+                                <th>Roles</th>
+                                <th>Group / Unit</th>
+                                <th>Email Confirmed</th>
+                                <th class="text-end pe-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in _filteredUsers)
+                            {
+                                var isCurrentAdmin = string.Equals(user.Id, _currentUserId, StringComparison.OrdinalIgnoreCase);
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-circle me-2 bg-primary text-white d-flex align-items-center justify-content-center"
+                                                 style="width: 34px; height: 34px; border-radius: 50%; font-weight: bold; font-size: 14px;">
+                                                @(string.IsNullOrEmpty(user.Email) ? "U" : user.Email.Substring(0, 1).ToUpper())
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">@user.Email</div>
+                                                <small class="text-muted text-truncate d-inline-block" style="max-width: 180px;">@user.Id</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div><strong>@(string.IsNullOrEmpty(user.ProfileName) ? "—" : user.ProfileName)</strong></div>
+                                        <small class="text-info">
+                                            @(string.IsNullOrEmpty(user.CallSign) ? "No callsign" : $"{user.CallSign}-{user.CallSignNumber}")
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @if (user.Roles.Count == 0)
+                                            {
+                                                <span class="badge bg-secondary">none</span>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var role in user.Roles)
+                                                {
+                                                    <span class="badge @(role == AppRoles.Admin ? "bg-danger" : role == AppRoles.GroupLeader ? "bg-warning text-dark" : "bg-primary")">
+                                                        @role
+                                                    </span>
+                                                }
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(user.GroupName))
+                                        {
+                                            <div><span class="badge bg-secondary"><i class="bi bi-diagram-3 me-1"></i>@user.GroupName</span></div>
+                                        }
+                                        @if (!string.IsNullOrEmpty(user.UnitName))
+                                        {
+                                            <small class="text-muted"><i class="bi bi-shield me-1"></i>@user.UnitName</small>
+                                        }
+                                        @if (string.IsNullOrEmpty(user.GroupName) && string.IsNullOrEmpty(user.UnitName))
+                                        {
+                                            <span class="text-muted fst-italic small">Unassigned</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (user.EmailConfirmed)
+                                        {
+                                            <span class="text-success small"><i class="bi bi-check-circle-fill me-1"></i>Yes</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-warning small"><i class="bi bi-clock me-1"></i>Pending</span>
+                                        }
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        @if (isCurrentAdmin)
+                                        {
+                                            <span class="badge bg-info text-dark" title="You cannot delete your own active administrator account">
+                                                <i class="bi bi-person-check-fill me-1"></i>You (Admin)
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            @if (_userToDeleteId == user.Id)
+                                            {
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <button class="btn btn-danger" @onclick="() => ConfirmDeleteUserAsync(user.Id)" disabled="@_isProcessing">
+                                                        <i class="bi bi-trash-fill me-1"></i> Confirm
+                                                    </button>
+                                                    <button class="btn btn-secondary" @onclick="CancelDeleteUser" disabled="@_isProcessing">
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-outline-danger btn-sm" @onclick="() => PromptDeleteUser(user.Id)" disabled="@_isProcessing">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Recent Traffic & Security Events -->
+    @if (_trafficStats.RecentEvents.Count > 0)
+    {
+        <div class="card shadow-sm border-0 bg-dark text-light mt-4">
+            <div class="card-header bg-dark border-secondary">
+                <h6 class="mb-0"><i class="bi bi-shield-shaded text-warning me-2"></i>Recent Security & Authentication Events</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm table-hover mb-0">
+                        <thead class="table-secondary">
+                            <tr>
+                                <th>Time (UTC)</th>
+                                <th>Event</th>
+                                <th>User</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ev in _trafficStats.RecentEvents)
+                            {
+                                <tr>
+                                    <td class="text-muted small">@ev.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    <td>
+                                        <span class="badge @(ev.EventType.Contains("Success") ? "bg-success" : "bg-danger")">
+                                            @ev.EventType
+                                        </span>
+                                    </td>
+                                    <td>@(string.IsNullOrEmpty(ev.User) ? "—" : ev.User)</td>
+                                    <td class="text-muted small">@ev.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private sealed record UserRow(
+        string Id,
+        string Email,
+        string ProfileName,
+        string CallSign,
+        int CallSignNumber,
+        List<string> Roles,
+        string? GroupName,
+        string? UnitName,
+        bool EmailConfirmed
+    );
+
+    private List<UserRow> _users = new();
+    private TrafficStats _trafficStats = new(0, 0, 0, 0, Array.Empty<TrafficDataPoint>(), Array.Empty<TrafficEvent>());
+    private string? _currentUserId;
+    private string _searchQuery = "";
+    private bool _isLoading = true;
+    private bool _isProcessing = false;
+    private string? _userToDeleteId;
+    private string? _statusMessage;
+    private string _statusMessageClass = "alert-success";
+    private int _timeframeHours = 24;
+    private double _maxGraphValue = 10;
+
+    private List<UserRow> _filteredUsers => string.IsNullOrWhiteSpace(_searchQuery)
+        ? _users
+        : _users.Where(u =>
+            (u.Email?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (u.ProfileName?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (u.CallSign?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (u.GroupName?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (u.UnitName?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            u.Roles.Any(r => r.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        await LoadDataAsync();
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        await LoadDataAsync();
+        ShowMessage("Dashboard data refreshed successfully.", "alert-success");
+    }
+
+    private void SetTimeframe(int hours)
+    {
+        _timeframeHours = hours;
+        LoadTrafficStats();
+    }
+
+    private void LoadTrafficStats()
+    {
+        _trafficStats = TrafficTracker.GetTrafficStats(TimeSpan.FromHours(_timeframeHours), bucketCount: 12);
+
+        var maxReq = _trafficStats.History.Count > 0 ? _trafficStats.History.Max(h => h.Requests) : 0;
+        var maxSuccess = _trafficStats.History.Count > 0 ? _trafficStats.History.Max(h => h.SuccessfulLogins) : 0;
+        var maxFail = _trafficStats.History.Count > 0 ? _trafficStats.History.Max(h => h.FailedLoginAttempts) : 0;
+        var maxActive = _trafficStats.History.Count > 0 ? _trafficStats.History.Max(h => h.ActiveUsers) : 0;
+
+        _maxGraphValue = Math.Max(10, Math.Max(maxReq, Math.Max(maxSuccess, Math.Max(maxFail, maxActive))) * 1.2);
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            LoadTrafficStats();
+
+            var appUsers = await DbContext.Users.AsNoTracking().ToListAsync();
+            var profiles = await DbContext.Profiles
+                .Include(p => p.Group)
+                .Include(p => p.Unit)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var roles = await DbContext.Roles.AsNoTracking().ToListAsync();
+            var userRoles = await DbContext.UserRoles.AsNoTracking().ToListAsync();
+
+            var list = new List<UserRow>();
+
+            foreach (var user in appUsers)
+            {
+                var userRoleIdList = userRoles.Where(ur => ur.UserId == user.Id).Select(ur => ur.RoleId).ToList();
+                var userRoleNames = roles.Where(r => userRoleIdList.Contains(r.Id)).Select(r => r.Name!).ToList();
+
+                var profile = profiles.FirstOrDefault(p => p.ApplicationUserId == user.Id);
+
+                list.Add(new UserRow(
+                    Id: user.Id,
+                    Email: user.Email ?? user.UserName ?? "—",
+                    ProfileName: profile?.Name ?? "",
+                    CallSign: profile?.CallSign ?? "",
+                    CallSignNumber: profile?.CallSignNumber ?? 0,
+                    Roles: userRoleNames,
+                    GroupName: profile?.Group?.Name,
+                    UnitName: profile?.Unit?.Name,
+                    EmailConfirmed: user.EmailConfirmed
+                ));
+            }
+
+            _users = list.OrderBy(u => u.Email).ToList();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error loading admin data: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ToggleRegistration()
+    {
+        var newState = !RegistrationService.IsRegistrationEnabled;
+        RegistrationService.SetRegistrationEnabled(newState);
+        ShowMessage(newState ? "User registration is now ENABLED." : "User registration is now DISABLED.", newState ? "alert-success" : "alert-warning");
+    }
+
+    private void PromptDeleteUser(string userId)
+    {
+        _userToDeleteId = userId;
+    }
+
+    private void CancelDeleteUser()
+    {
+        _userToDeleteId = null;
+    }
+
+    private async Task ConfirmDeleteUserAsync(string userId)
+    {
+        if (string.Equals(userId, _currentUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            ShowMessage("You cannot delete your own administrator account.", "alert-danger");
+            _userToDeleteId = null;
+            return;
+        }
+
+        _isProcessing = true;
+        try
+        {
+            var appUser = await UserManager.FindByIdAsync(userId);
+            if (appUser == null)
+            {
+                ShowMessage("User not found.", "alert-danger");
+                return;
+            }
+
+            // Remove/unlink domain profile and leadership references if any
+            var profile = await DbContext.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == userId);
+            if (profile != null)
+            {
+                // Unset leadership in groups
+                var leadingGroups = await DbContext.Groups.Where(g => g.LeaderId == profile.ID).ToListAsync();
+                foreach (var g in leadingGroups)
+                {
+                    g.LeaderId = null;
+                }
+
+                // Unset leadership in units
+                var leadingUnits = await DbContext.Units.Where(u => u.LeaderId == profile.ID).ToListAsync();
+                foreach (var u in leadingUnits)
+                {
+                    u.LeaderId = null;
+                }
+
+                DbContext.Profiles.Remove(profile);
+                await DbContext.SaveChangesAsync();
+            }
+
+            // Delete Identity user
+            var result = await UserManager.DeleteAsync(appUser);
+            if (result.Succeeded)
+            {
+                ShowMessage($"User '{appUser.Email ?? appUser.UserName}' was deleted successfully.", "alert-success");
+            }
+            else
+            {
+                ShowMessage($"Error deleting user: {string.Join(", ", result.Errors.Select(e => e.Description))}", "alert-danger");
+            }
+
+            _userToDeleteId = null;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Exception during user deletion: {ex.Message}", "alert-danger");
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private void ShowMessage(string message, string alertClass)
+    {
+        _statusMessage = message;
+        _statusMessageClass = alertClass;
+    }
+}
