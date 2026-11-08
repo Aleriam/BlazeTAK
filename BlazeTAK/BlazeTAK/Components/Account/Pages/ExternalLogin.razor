@@ -7,6 +7,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using BlazeTAK.Data
+@using BlazeTAK.Services
 
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
@@ -15,6 +16,8 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<ExternalLogin> Logger
+@inject IRegistrationService RegistrationService
+@inject ITrafficTracker TrafficTracker
 
 <PageTitle>Register</PageTitle>
 
@@ -112,6 +115,7 @@
 
         if (result.Succeeded)
         {
+            TrafficTracker.RecordLoginAttempt(externalLoginInfo.Principal.Identity?.Name ?? "ExternalUser", success: true, detail: $"External login ({externalLoginInfo.LoginProvider})");
             Logger.LogInformation(
                 "{Name} logged in with {LoginProvider} provider.",
                 externalLoginInfo.Principal.Identity?.Name,
@@ -121,6 +125,7 @@
         }
         else if (result.IsLockedOut)
         {
+            TrafficTracker.RecordLoginAttempt(externalLoginInfo.Principal.Identity?.Name ?? "ExternalUser", success: false, detail: "Account locked out");
             RedirectManager.RedirectTo("Account/Lockout");
             return;
         }
@@ -137,6 +142,12 @@
         if (externalLoginInfo is null)
         {
             RedirectManager.RedirectToWithStatus("Account/Login", "Error loading external login information during confirmation.", HttpContext);
+            return;
+        }
+
+        if (!RegistrationService.IsRegistrationEnabled)
+        {
+            message = "Error: Registration is currently disabled by the administrator.";
             return;
         }
 

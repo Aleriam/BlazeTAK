@@ -42,13 +42,13 @@
                 
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="livemap">
-                        <span class="bi bi-geo-alt-fill" aria-hidden="true"></span> LiveMap
+                        <img width="50" height="50" src="https://img.icons8.com/ios/50/ff5521/map-marker--v1.png" alt="map-marker--v1" class="bi" aria-hidden="true"/> LiveMap
                     </NavLink>
                 </div>
 
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="chat">
-                        <span class="bi bi-chat-dots" aria-hidden="true"></span> Messages
+                        <img width="32" height="32" src="https://img.icons8.com/windows/32/ff5521/chat.png" alt="chat" class="bi" aria-hidden="true"/> Messages
                     </NavLink>
                 </div>
 
@@ -63,6 +63,15 @@
                         <span class="bi bi-diagram-3" aria-hidden="true"></span> Groups
                     </NavLink>
                 </div>
+
+                @if (context.User.IsInRole("admin"))
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link" href="admin">
+                            <span class="bi bi-shield-lock" aria-hidden="true"></span> Admin
+                        </NavLink>
+                    </div>
+                }
             </Authorized>
             <NotAuthorized>
                 <div class="nav-item px-3">

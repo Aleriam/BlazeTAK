@@ -30,10 +30,37 @@ window.liveMap = {
 
         var map = L.map(elementId).setView([lat, lng], zoom);
 
-        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        var openTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
             maxZoom: 17,
             attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
-        }).addTo(map);
+        });
+
+        var darkOpenTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            maxZoom: 17,
+            attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
+            className: 'dark-tiles'
+        });
+
+        darkOpenTopoMap.on('tileload', function (e) {
+            if (e.tile) {
+                e.tile.classList.add('dark-tile');
+            }
+        });
+
+        var esriWorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 19,
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        });
+
+        openTopoMap.addTo(map);
+
+        var baseMaps = {
+            "OpenTopoMap": openTopoMap,
+            "OpenTopoMap (Dark)": darkOpenTopoMap,
+            "Esri World Imagery": esriWorldImagery
+        };
+
+        L.control.layers(baseMaps, null, { position: 'topleft' }).addTo(map);
 
         this.instances[elementId] = map;
         this.markers[elementId] = {};
@@ -64,7 +91,7 @@ window.liveMap = {
         var mapElement = document.getElementById(elementId);
         if (mapElement) {
             if (isPlacing) {
-                mapElement.style.cursor = 'crosshair';
+                mapElement.style.cursor = "url('https://img.icons8.com/dotty/80/ff5521/crosshair.png') 40 40, crosshair";
             } else {
                 mapElement.style.cursor = '';
             }

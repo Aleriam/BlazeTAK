@@ -346,8 +346,42 @@ h1:focus {
 
 /* Leaflet Map Controls and Popups */
 .leaflet-container {
-    background-color: var(--background);
+    background: var(--background) !important;
+    background-color: var(--background) !important;
     font-family: inherit;
+    cursor: url('https://img.icons8.com/dotty/80/ff5521/crosshair.png') 40 40, crosshair;
+}
+
+.leaflet-tile-pane,
+.leaflet-map-pane {
+    background: var(--background) !important;
+    background-color: var(--background) !important;
+}
+
+.leaflet-container.leaflet-grab,
+.leaflet-grab {
+    cursor: url('https://img.icons8.com/dotty/80/ff5521/crosshair.png') 40 40, crosshair;
+}
+
+.leaflet-crosshair,
+.leaflet-crosshair .leaflet-interactive {
+    cursor: url('https://img.icons8.com/dotty/80/ff5521/crosshair.png') 40 40, crosshair;
+}
+
+/* Dark Mode Map Tiles */
+.dark-tiles,
+.dark-tile,
+.leaflet-layer.dark-tiles,
+.leaflet-layer.dark-tiles .leaflet-tile-container,
+.leaflet-layer.dark-tiles .leaflet-tile,
+.leaflet-layer.dark-tiles img,
+.dark-tiles .leaflet-tile,
+.dark-tiles .leaflet-tile-container img,
+.dark-tiles img,
+img.dark-tile,
+.leaflet-tile.dark-tile {
+    filter: invert(100%) hue-rotate(70deg) brightness(100%) contrast(120%) saturate(140%) !important;
+    -webkit-filter: invert(100%) hue-rotate(70deg) brightness(100%) contrast(120%) saturate(140%) !important;
 }
 
 .leaflet-top.leaflet-left {
@@ -386,6 +420,25 @@ h1:focus {
 .leaflet-bar {
     border: 1px solid var(--front);
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
+}
+
+.leaflet-control-layers {
+    background-color: var(--background) !important;
+    border: 1px solid var(--front) !important;
+    color: var(--text) !important;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
+}
+
+.leaflet-control-layers-expanded {
+    padding: 6px 10px 6px 6px;
+    background-color: var(--background) !important;
+    color: var(--text) !important;
+}
+
+.leaflet-control-layers label {
+    color: var(--text);
+    margin-bottom: 2px;
+    cursor: pointer;
 }
 
 .leaflet-control-attribution {

@@ -46,6 +46,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 builder.Services.AddSingleton<IUserLocationService, UserLocationService>();
 builder.Services.AddSingleton<IMessageService, MessageService>();
+builder.Services.AddSingleton<IRegistrationService, RegistrationService>();
+builder.Services.AddSingleton<ITrafficTracker, TrafficTracker>();
 //also registered server-side: static prerendering of the wasm chat page resolves
 //services from the server container; the connection itself starts interactively in the browser
 builder.Services.AddScoped<BlazeTAK.Client.Services.ChatService>();
@@ -72,6 +74,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHttpsRedirection();
 }
+
+app.UseMiddleware<TrafficTrackingMiddleware>();
 
 app.UseAntiforgery();
 
