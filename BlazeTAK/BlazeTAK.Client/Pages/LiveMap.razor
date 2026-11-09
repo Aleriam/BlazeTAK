@@ -17,7 +17,9 @@
         <label for="nav-toggle" class="nav-toggle-btn shadow" title="Toggle navigation menu" aria-label="Toggle navigation menu">
             <span class="nav-toggle-icon"></span>
         </label>
-        <label for="nav-toggle" class="d-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch;" title="Toggle navigation menu">
+
+        <!-- Desktop Status Bar (Visible on md and larger screens) -->
+        <div class="d-none d-md-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch;">
             <span class="fw-bold small text-uppercase" style="color: var(--front);"><i class="bi bi-geo-alt-fill me-1"></i>LiveMap</span>
             @if (hubConnection?.State == HubConnectionState.Connected)
             {
@@ -40,7 +42,41 @@
             {
                 <span class="badge bg-success ms-1" title="GPS Tracking Active"><i class="bi bi-compass-fill me-1"></i>GPS Active</span>
             }
-        </label>
+        </div>
+
+        <!-- Mobile Compact / Expandable Status (Visible on smaller screens) -->
+        <div class="d-flex d-md-none align-items-center gap-2">
+            <button type="button" class="livemap-status-info-btn shadow @(isMobileStatusExpanded ? "active" : "")" @onclick="ToggleMobileStatus" title="Toggle status details" aria-label="Toggle status details">
+                <img width="50" height="50" src="https://img.icons8.com/ios/50/info--v4.png" alt="info--v4" class="livemap-status-info-icon" />
+            </button>
+            @if (isMobileStatusExpanded)
+            {
+                <div class="d-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar livemap-status-bar-mobile overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch;" @onclick="ToggleMobileStatus" title="Click to collapse status">
+                    <span class="fw-bold small text-uppercase" style="color: var(--front);"><i class="bi bi-geo-alt-fill me-1"></i>LiveMap</span>
+                    @if (hubConnection?.State == HubConnectionState.Connected)
+                    {
+                        <span class="badge badge-highlight"><i class="bi bi-broadcast"></i> Synced (@markers.Count)</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-theme"><i class="bi bi-arrow-repeat"></i> Connecting...</span>
+                    }
+                    <span class="badge badge-theme font-monospace ms-1">@(string.IsNullOrEmpty(currentGroupName) ? "Global Group" : currentGroupName)</span>
+                    @if (userLocations.Count > 0)
+                    {
+                        <span class="badge bg-info text-dark ms-1" title="Unit Members Sharing Location"><i class="bi bi-people-fill me-1"></i>@userLocations.Count Unit</span>
+                    }
+                    @if (liveUnitMarkers.Count > 0)
+                    {
+                        <span class="badge bg-primary ms-1" title="Live Unit Markers"><i class="bi bi-shield-shaded me-1"></i>@liveUnitMarkers.Count HQ/Squad</span>
+                    }
+                    @if (isGpsTracking)
+                    {
+                        <span class="badge bg-success ms-1" title="GPS Tracking Active"><i class="bi bi-compass-fill me-1"></i>GPS Active</span>
+                    }
+                </div>
+            }
+        </div>
     </div>
 
     <!-- Placement Mode Banner (on top of map when user is placing marker) -->
@@ -54,6 +90,20 @@
                 <span class="ms-2 small opacity-75">Click anywhere on map to position</span>
             </div>
             <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" @onclick="CancelPlacementMode">
+                <i class="bi bi-x-circle me-1"></i>Cancel
+            </button>
+        </div>
+    }
+
+    <!-- Set Location Mode Banner -->
+    @if (setLocationMode)
+    {
+        <div class="position-absolute top-0 start-50 translate-middle-x mt-3 shadow-lg p-2 px-4 rounded-pill d-flex align-items-center gap-3 livemap-banner-place" style="z-index: 1000; animation: fadeIn 0.2s ease-in-out;">
+            <div>
+                <i class="bi bi-geo-alt-fill me-1"></i>
+                <strong>Set Location Mode:</strong> Click anywhere on the map to set your position.
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" @onclick="ToggleSetLocationMode">
                 <i class="bi bi-x-circle me-1"></i>Cancel
             </button>
         </div>
@@ -129,8 +179,23 @@
                             <i class="bi @(isGpsPanelOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
                         </button>
                         
-                        <button type="button" class="btn btn-sm text-start d-flex justify-content-between align-items-center" @onclick="ToggleSetLocationMode">
-                            <span><i class="bi bi-compass-fill me-2" style="pointer-events: none;"></i>Set location</span>
+                        <button type="button" class="btn btn-sm @(setLocationMode ? "btn-warning" : "btn-outline-warning") text-start d-flex justify-content-between align-items-center" @onclick="ToggleSetLocationMode">
+                            <span><i class="bi bi-geo-alt-fill me-2" style="pointer-events: none;"></i>Set location</span>
+                            @if (setLocationMode)
+                            {
+                                <span class="badge bg-warning text-dark">Active</span>
+                            }
+                        </button>
+
+                        <button type="button" class="btn btn-sm @(isFullscreen ? "btn-warning" : "btn-outline-warning") text-start d-flex justify-content-between align-items-center" @onclick="ToggleFullscreen" title="Toggle Fullscreen Mode">
+                            <span class="d-flex align-items-center">
+                                <img width="48" height="48" src="https://img.icons8.com/fluency-systems-regular/48/fullscreen.png" alt="fullscreen" class="me-2 livemap-fullscreen-icon" />
+                                Fullscreen
+                            </span>
+                            @if (isFullscreen)
+                            {
+                                <span class="badge bg-warning text-dark">Active</span>
+                            }
                         </button>
                         
                         <button type="button" class="btn btn-sm @(isSettingsOpen ? "btn-secondary" : "btn-outline-secondary") text-start d-flex justify-content-between align-items-center" @onclick="ToggleSettings">
@@ -161,14 +226,14 @@
                             
                             @if (!string.IsNullOrEmpty(gpsStatusMessage))
                             {
-                                <div class="p-1 mb-2 bg-dark rounded text-light font-monospace small" style="font-size: 0.72rem;">
+                                <div class="p-1 mb-2 border rounded livemap-panel font-monospace small" style="font-size: 0.72rem;">
                                     @gpsStatusMessage
                                 </div>
                             }
 
                             @if (myLocation != null)
                             {
-                                <div class="bg-light p-2 rounded mb-2 border text-dark font-monospace" style="font-size: 0.75rem;">
+                                <div class="p-2 mb-2 border rounded livemap-panel font-monospace" style="font-size: 0.75rem;">
                                     <div><strong>Lat:</strong> @myLocation.Latitude.ToString("F5")</div>
                                     <div><strong>Lng:</strong> @myLocation.Longitude.ToString("F5")</div>
                                     @if (myLocation.Heading.HasValue)
@@ -430,6 +495,11 @@
 
     //lcoation definiciton state
     private bool setLocationMode = false;
+    private bool isFollowingLocation = false;
+    private bool isFullscreen = false;
+    
+    // Mobile Status Bar State
+    private bool isMobileStatusExpanded = false;
     
     // Moving Mode State
     private Guid? movingMarkerId;
@@ -598,6 +668,22 @@
             {
                 Console.WriteLine($"Error fetching initial live locations: {locEx.Message}");
             }
+
+            if (mapInitialized)
+            {
+                if (markers.Count > 0)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.loadMarkers", mapId, markers.Values.ToList());
+                }
+                if (userLocations.Count > 0)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.loadUserLocations", mapId, userLocations.Values.ToList(), myLocation?.UserId.ToString());
+                }
+                if (liveUnitMarkers.Count > 0)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.loadLiveUnitMarkers", mapId, liveUnitMarkers);
+                }
+            }
             
         }
         catch (Exception ex)
@@ -613,6 +699,7 @@
             mapInitialized = true;
             dotNetRef = DotNetObjectReference.Create(this);
             await JSRuntime.InvokeVoidAsync("liveMap.init", mapId, 47.5, 14.5, 6, dotNetRef);
+            await JSRuntime.InvokeVoidAsync("liveMap.setFollowLocationState", mapId, isFollowingLocation);
 
             // Pre-generate milsymbol preview images for categories
             await LoadSymbolPreviews();
@@ -755,6 +842,21 @@
     }
 
     [JSInvokable]
+    public async Task ToggleFollowLocation()
+    {
+        isFollowingLocation = !isFollowingLocation;
+        if (mapInitialized)
+        {
+            await JSRuntime.InvokeVoidAsync("liveMap.setFollowLocationState", mapId, isFollowingLocation);
+            if (isFollowingLocation && myLocation != null)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.centerMap", mapId, myLocation.Latitude, myLocation.Longitude);
+            }
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
     public async Task OnLocationChanged(double lat, double lng, double? heading, double? speed, double? accuracy)
     {
         try
@@ -781,10 +883,73 @@
                     gpsStatusMessage = $"Position updated: {lat:F5}, {lng:F5}";
                 }
             }
+            else
+            {
+                if (myLocation == null)
+                {
+                    myLocation = new UserLocationDto
+                    {
+                        UserId = Guid.NewGuid(),
+                        Name = "You",
+                        Latitude = lat,
+                        Longitude = lng,
+                        Heading = heading,
+                        Speed = speed,
+                        Accuracy = accuracy,
+                        Timestamp = DateTime.UtcNow
+                    };
+                }
+                else
+                {
+                    myLocation.Latitude = lat;
+                    myLocation.Longitude = lng;
+                    myLocation.Heading = heading;
+                    myLocation.Speed = speed;
+                    myLocation.Accuracy = accuracy;
+                    myLocation.Timestamp = DateTime.UtcNow;
+                }
+                userLocations[myLocation.UserId] = myLocation;
+                if (mapInitialized)
+                {
+                    await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateUserLocation", mapId, myLocation, true);
+                }
+                gpsStatusMessage = $"Local position updated: {lat:F5}, {lng:F5}";
+            }
         }
         catch (Exception ex)
         {
             gpsStatusMessage = $"Location sync error: {ex.Message}";
+            if (myLocation == null)
+            {
+                myLocation = new UserLocationDto
+                {
+                    UserId = Guid.NewGuid(),
+                    Name = "You",
+                    Latitude = lat,
+                    Longitude = lng,
+                    Heading = heading,
+                    Speed = speed,
+                    Accuracy = accuracy,
+                    Timestamp = DateTime.UtcNow
+                };
+            }
+            else
+            {
+                myLocation.Latitude = lat;
+                myLocation.Longitude = lng;
+                myLocation.Heading = heading;
+                myLocation.Timestamp = DateTime.UtcNow;
+            }
+            userLocations[myLocation.UserId] = myLocation;
+            if (mapInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.addOrUpdateUserLocation", mapId, myLocation, true);
+            }
+        }
+
+        if (isFollowingLocation && mapInitialized && myLocation != null)
+        {
+            await JSRuntime.InvokeVoidAsync("liveMap.centerMap", mapId, myLocation.Latitude, myLocation.Longitude);
         }
 
         await InvokeAsync(StateHasChanged);
@@ -815,6 +980,30 @@
         await OnLocationChanged(newLat, newLng, heading, 1.5, 5.0);
     }
 
+    private void ToggleMobileStatus()
+    {
+        isMobileStatusExpanded = !isMobileStatusExpanded;
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        try
+        {
+            isFullscreen = await JSRuntime.InvokeAsync<bool>("liveMap.toggleFullscreen");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[LiveMap] Fullscreen error: {ex.Message}");
+        }
+    }
+
+    [JSInvokable]
+    public void OnFullscreenChanged(bool fullscreen)
+    {
+        isFullscreen = fullscreen;
+        StateHasChanged();
+    }
+
     private void ToggleCategory(string categoryId)
     {
         expandedCategoryId = expandedCategoryId == categoryId ? string.Empty : categoryId;
@@ -822,6 +1011,10 @@
 
     private async Task SelectSymbolToPlace(MarkerSymbolOption symbol)
     {
+        if (setLocationMode)
+        {
+            await ToggleSetLocationMode();
+        }
         selectedSymbol = symbol;
         isPlacementMode = true;
         await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, true);
@@ -833,28 +1026,47 @@
         await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
     }
     
-    private void ToggleSetLocationMode()
+    private async Task ToggleSetLocationMode()
     {
         setLocationMode = !setLocationMode;
-        Console.WriteLine("Set location mode toggled");
+        if (setLocationMode)
+        {
+            if (isPlacementMode)
+            {
+                await CancelPlacementMode();
+            }
+            if (mapInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, true);
+            }
+        }
+        else
+        {
+            if (mapInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
+            }
+        }
     }
 
     [JSInvokable]
     public async Task OnMapClicked(double lat, double lng)
     {
-        
         if (setLocationMode)
         {
-            myLocation = new UserLocationDto
+            setLocationMode = false;
+            if (mapInitialized)
             {
-                Latitude = Math.Round(lat, 6),
-                Longitude = Math.Round(lng, 6)
-            };
-            setLocationMode = false;    
+                await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
+            }
+            await OnLocationChanged(Math.Round(lat, 6), Math.Round(lng, 6), myLocation?.Heading ?? 0, myLocation?.Speed ?? 0, 5.0);
+            if (isFollowingLocation && mapInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("liveMap.centerMap", mapId, lat, lng);
+            }
         }
-        else if(isPlacementMode)
+        else if (isPlacementMode)
         {
-         
             // Turn off placement mode
             isPlacementMode = false;
             await JSRuntime.InvokeVoidAsync("liveMap.setPlacementMode", mapId, false);
