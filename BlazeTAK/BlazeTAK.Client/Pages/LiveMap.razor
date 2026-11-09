@@ -19,7 +19,7 @@
         </label>
 
         <!-- Desktop Status Bar (Visible on md and larger screens) -->
-        <div class="d-none d-md-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch;">
+        <label for="nav-toggle" class="d-none d-md-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch; cursor: pointer;" title="Toggle navigation menu" aria-label="Toggle navigation menu">
             <span class="fw-bold small text-uppercase" style="color: var(--front);"><i class="bi bi-geo-alt-fill me-1"></i>LiveMap</span>
             @if (hubConnection?.State == HubConnectionState.Connected)
             {
@@ -42,41 +42,12 @@
             {
                 <span class="badge bg-success ms-1" title="GPS Tracking Active"><i class="bi bi-compass-fill me-1"></i>GPS Active</span>
             }
-        </div>
+        </label>
 
-        <!-- Mobile Compact / Expandable Status (Visible on smaller screens) -->
-        <div class="d-flex d-md-none align-items-center gap-2">
-            <button type="button" class="livemap-status-info-btn shadow @(isMobileStatusExpanded ? "active" : "")" @onclick="ToggleMobileStatus" title="Toggle status details" aria-label="Toggle status details">
-                <img width="50" height="50" src="https://img.icons8.com/ios/50/info--v4.png" alt="info--v4" class="livemap-status-info-icon" />
-            </button>
-            @if (isMobileStatusExpanded)
-            {
-                <div class="d-flex align-items-center gap-2 px-3 py-1 rounded shadow livemap-status-bar livemap-status-bar-mobile overflow-x-auto text-nowrap" style="height: 2.5rem; -webkit-overflow-scrolling: touch;" @onclick="ToggleMobileStatus" title="Click to collapse status">
-                    <span class="fw-bold small text-uppercase" style="color: var(--front);"><i class="bi bi-geo-alt-fill me-1"></i>LiveMap</span>
-                    @if (hubConnection?.State == HubConnectionState.Connected)
-                    {
-                        <span class="badge badge-highlight"><i class="bi bi-broadcast"></i> Synced (@markers.Count)</span>
-                    }
-                    else
-                    {
-                        <span class="badge badge-theme"><i class="bi bi-arrow-repeat"></i> Connecting...</span>
-                    }
-                    <span class="badge badge-theme font-monospace ms-1">@(string.IsNullOrEmpty(currentGroupName) ? "Global Group" : currentGroupName)</span>
-                    @if (userLocations.Count > 0)
-                    {
-                        <span class="badge bg-info text-dark ms-1" title="Unit Members Sharing Location"><i class="bi bi-people-fill me-1"></i>@userLocations.Count Unit</span>
-                    }
-                    @if (liveUnitMarkers.Count > 0)
-                    {
-                        <span class="badge bg-primary ms-1" title="Live Unit Markers"><i class="bi bi-shield-shaded me-1"></i>@liveUnitMarkers.Count HQ/Squad</span>
-                    }
-                    @if (isGpsTracking)
-                    {
-                        <span class="badge bg-success ms-1" title="GPS Tracking Active"><i class="bi bi-compass-fill me-1"></i>GPS Active</span>
-                    }
-                </div>
-            }
-        </div>
+        <!-- Mobile Compact (Visible on smaller screens) -->
+        <label for="nav-toggle" class="d-flex d-md-none align-items-center justify-content-center shadow livemap-status-info-btn" style="cursor: pointer;" title="Toggle navigation menu" aria-label="Toggle navigation menu">
+            <img width="50" height="50" src="https://img.icons8.com/ios/50/top-menu.png" alt="top-menu" class="livemap-status-info-icon" />
+        </label>
     </div>
 
     <!-- Placement Mode Banner (on top of map when user is placing marker) -->
@@ -198,6 +169,11 @@
                             }
                         </button>
                         
+                        <button type="button" class="btn btn-sm @(isExtraInfoOpen ? "btn-info text-dark" : "btn-outline-info") text-start d-flex justify-content-between align-items-center" @onclick="ToggleExtraInfo" title="Toggle Extra Information">
+                            <span><i class="bi bi-info-circle-fill me-2"></i>ExtraInfo</span>
+                            <i class="bi @(isExtraInfoOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                        </button>
+
                         <button type="button" class="btn btn-sm @(isSettingsOpen ? "btn-secondary" : "btn-outline-secondary") text-start d-flex justify-content-between align-items-center" @onclick="ToggleSettings">
                             <span><i class="bi bi-gear-fill me-2"></i>Settings</span>
                             <i class="bi @(isSettingsOpen ? "bi-chevron-down" : "bi-chevron-right")"></i>
@@ -276,6 +252,64 @@
                                     <button type="button" class="btn btn-sm btn-outline-warning py-0" @onclick="() => SimulateMove(35, 0)" title="Move 35m North (triggers >30m unit threshold / radius exit)">
                                         <i class="bi bi-lightning-charge"></i> Move +35m (Unit Update)
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- ExtraInfo Panel -->
+                    @if (isExtraInfoOpen)
+                    {
+                        <div class="p-2 mb-2 border rounded livemap-panel small">
+                            <h6 class="border-bottom pb-1 mb-2 fw-bold text-info"><i class="bi bi-info-circle me-1"></i>Extra Info / Status</h6>
+                            <div class="d-flex flex-column gap-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Map Connection:</span>
+                                    @if (hubConnection?.State == HubConnectionState.Connected)
+                                    {
+                                        <span class="badge badge-highlight"><i class="bi bi-broadcast"></i> Synced (@markers.Count)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-theme"><i class="bi bi-arrow-repeat"></i> Connecting...</span>
+                                    }
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Tactical Group:</span>
+                                    <span class="badge badge-theme font-monospace">@(string.IsNullOrEmpty(currentGroupName) ? "Global Group" : currentGroupName)</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>Unit Members:</span>
+                                    @if (userLocations.Count > 0)
+                                    {
+                                        <span class="badge bg-info text-dark"><i class="bi bi-people-fill me-1"></i>@userLocations.Count Unit</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">0 Unit</span>
+                                    }
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>HQ / Squad:</span>
+                                    @if (liveUnitMarkers.Count > 0)
+                                    {
+                                        <span class="badge bg-primary"><i class="bi bi-shield-shaded me-1"></i>@liveUnitMarkers.Count HQ/Squad</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">0 HQ/Squad</span>
+                                    }
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span>GPS Geolocation:</span>
+                                    @if (isGpsTracking)
+                                    {
+                                        <span class="badge bg-success"><i class="bi bi-compass-fill me-1"></i>GPS Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -497,9 +531,7 @@
     private bool setLocationMode = false;
     private bool isFollowingLocation = false;
     private bool isFullscreen = false;
-    
-    // Mobile Status Bar State
-    private bool isMobileStatusExpanded = false;
+    private bool isExtraInfoOpen = false;
     
     // Moving Mode State
     private Guid? movingMarkerId;
@@ -980,9 +1012,9 @@
         await OnLocationChanged(newLat, newLng, heading, 1.5, 5.0);
     }
 
-    private void ToggleMobileStatus()
+    private void ToggleExtraInfo()
     {
-        isMobileStatusExpanded = !isMobileStatusExpanded;
+        isExtraInfoOpen = !isExtraInfoOpen;
     }
 
     private async Task ToggleFullscreen()
