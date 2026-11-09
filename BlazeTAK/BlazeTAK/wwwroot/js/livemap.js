@@ -60,14 +60,14 @@ window.liveMap = {
             maxZoom: 19,
             attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
         });
-
+        
         openTopoMap.addTo(map);
 
         var baseMaps = {
             "OpenTopoMap": openTopoMap,
             "OpenTopoMap (Dark)": darkOpenTopoMap,
             "OpenStreetMap": openStreetMap,
-            "Esri World Imagery": esriWorldImagery
+            "Esri World Imagery": esriWorldImagery,
         };
 
         L.control.layers(baseMaps, null, { position: 'topleft' }).addTo(map);
