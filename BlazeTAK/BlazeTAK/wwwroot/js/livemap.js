@@ -7,6 +7,10 @@ window.liveMap = {
     placementModes: {},
     watchIds: {},
     lastSentPositions: {},
+    followControls: {},
+    followStates: {},
+    selfLocations: {},
+    fullscreenListenerAttached: false,
 
     init: function (elementId, initialLat, initialLng, initialZoom, dotNetRef) {
         if (typeof L === 'undefined') {
@@ -62,28 +66,128 @@ window.liveMap = {
 
         L.control.layers(baseMaps, null, { position: 'topleft' }).addTo(map);
 
+        // Add Follow Location control placed directly under map selection
+        var self = this;
+        var FollowLocationControl = L.Control.extend({
+            options: { position: 'topleft' },
+            onAdd: function () {
+                var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control follow-location-control-container');
+                var button = L.DomUtil.create('a', 'btn-follow-location follow-location-inactive', container);
+                button.href = '#';
+                button.role = 'button';
+                button.title = 'Toggle Follow Location (Keep map centered)';
+                button.innerHTML = '<img width="24" height="24" src="https://img.icons8.com/material-rounded/24/near-me.png" alt="near-me" class="follow-location-icon" />';
+
+                L.DomEvent.disableClickPropagation(container);
+                L.DomEvent.disableScrollPropagation(container);
+
+                L.DomEvent.on(button, 'click', function (e) {
+                    L.DomEvent.preventDefault(e);
+                    if (self.dotNetRefs[elementId]) {
+                        self.dotNetRefs[elementId].invokeMethodAsync('ToggleFollowLocation');
+                    }
+                });
+
+                self.followControls[elementId] = button;
+                return container;
+            }
+        });
+        new FollowLocationControl().addTo(map);
+
         this.instances[elementId] = map;
         this.markers[elementId] = {};
         this.userLocationMarkers[elementId] = {};
         this.unitLiveMarkers[elementId] = {};
         this.dotNetRefs[elementId] = dotNetRef;
         this.placementModes[elementId] = false;
+        this.followStates[elementId] = false;
+        this.selfLocations[elementId] = null;
 
-        var self = this;
         map.on('click', function (e) {
-            if (self.placementModes[elementId] && self.dotNetRefs[elementId]) {
+            if (self.dotNetRefs[elementId]) {
                 self.dotNetRefs[elementId].invokeMethodAsync('OnMapClicked', e.latlng.lat, e.latlng.lng);
             }
-            else
-            {
-                self.dotNetRefs[elementId].invokeMethodAsync('OnMapClicked', e.latlng.lat, e.latlng.lng);   
+        });
+
+        map.on('dragend', function () {
+            if (self.followStates[elementId] && self.selfLocations[elementId]) {
+                map.panTo([self.selfLocations[elementId].lat, self.selfLocations[elementId].lng]);
             }
         });
+
+        if (!this.fullscreenListenerAttached) {
+            this.fullscreenListenerAttached = true;
+            var handleFsChange = function () {
+                var currentFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+                for (var id in self.dotNetRefs) {
+                    if (self.dotNetRefs[id]) {
+                        self.dotNetRefs[id].invokeMethodAsync('OnFullscreenChanged', currentFs).catch(function () {});
+                    }
+                }
+                setTimeout(function () {
+                    for (var mapId in self.instances) {
+                        if (self.instances[mapId]) {
+                            self.instances[mapId].invalidateSize();
+                        }
+                    }
+                }, 200);
+            };
+            document.addEventListener('fullscreenchange', handleFsChange);
+            document.addEventListener('webkitfullscreenchange', handleFsChange);
+            document.addEventListener('mozfullscreenchange', handleFsChange);
+            document.addEventListener('MSFullscreenChange', handleFsChange);
+        }
 
         // Invalidate size to ensure full rendering if container size changed
         setTimeout(function () {
             map.invalidateSize();
         }, 200);
+    },
+
+    toggleFullscreen: function () {
+        var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+        if (!isFs) {
+            var el = document.documentElement;
+            if (el.requestFullscreen) {
+                el.requestFullscreen();
+            } else if (el.webkitRequestFullscreen) {
+                el.webkitRequestFullscreen();
+            } else if (el.mozRequestFullScreen) {
+                el.mozRequestFullScreen();
+            } else if (el.msRequestFullscreen) {
+                el.msRequestFullscreen();
+            }
+            return true;
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+            return false;
+        }
+    },
+
+    isFullscreen: function () {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+    },
+
+    setFollowLocationState: function (elementId, isActive) {
+        this.followStates[elementId] = !!isActive;
+        var btn = this.followControls && this.followControls[elementId];
+        if (btn) {
+            if (isActive) {
+                btn.classList.remove('follow-location-inactive');
+                btn.classList.add('follow-location-active');
+            } else {
+                btn.classList.remove('follow-location-active');
+                btn.classList.add('follow-location-inactive');
+            }
+        }
     },
 
     setPlacementMode: function (elementId, isPlacing) {
@@ -292,6 +396,10 @@ window.liveMap = {
     addOrUpdateUserLocation: function (elementId, locDto, isSelf) {
         var map = this.instances[elementId];
         if (!map || !locDto) return;
+
+        if (isSelf) {
+            this.selfLocations[elementId] = { lat: locDto.latitude, lng: locDto.longitude };
+        }
 
         var userMarkers = this.userLocationMarkers[elementId] || (this.userLocationMarkers[elementId] = {});
         var existing = userMarkers[locDto.userId];
@@ -518,6 +626,9 @@ window.liveMap = {
     centerMap: function (elementId, lat, lng, zoom) {
         var map = this.instances[elementId];
         if (map && lat !== undefined && lng !== undefined) {
+            if (this.followStates && this.followStates[elementId]) {
+                this.selfLocations[elementId] = { lat: lat, lng: lng };
+            }
             if (zoom !== undefined && zoom !== null) {
                 map.setView([lat, lng], zoom);
             } else {
@@ -587,16 +698,19 @@ window.liveMap = {
         delete this.dotNetRefs[elementId];
         delete this.placementModes[elementId];
         delete this.lastSentPositions[elementId];
+        delete this.followControls[elementId];
+        delete this.followStates[elementId];
+        delete this.selfLocations[elementId];
     },
 
     calculateDistance: function (lat1, lon1, lat2, lon2) {
         var R = 6371000; // meters
         var dLat = (lat2 - lat1) * Math.PI / 180.0;
         var dLon = (lon2 - lon1) * Math.PI / 180.0;
-        var a = Math.sin(dLat / 2) * Math.Sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0) *
-                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
-        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180.0) * Math.cos(lat2 * Math.PI / 180.0) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     },
 

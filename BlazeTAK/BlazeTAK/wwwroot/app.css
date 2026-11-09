@@ -427,6 +427,22 @@ img.dark-tile,
     border: 1px solid var(--front) !important;
     color: var(--text) !important;
     box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
+    border-radius: 4px;
+}
+
+.leaflet-control-layers:not(.leaflet-control-layers-expanded) {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.leaflet-control-layers-toggle {
+    width: 100% !important;
+    height: 100% !important;
+    background-size: 26px 26px !important;
+    background-position: center !important;
 }
 
 .leaflet-control-layers-expanded {
@@ -448,6 +464,77 @@ img.dark-tile,
 
 .leaflet-control-attribution a {
     color: var(--front) !important;
+}
+
+/* Follow Location Control Button under Map Selection */
+.follow-location-control-container {
+    margin-top: 10px !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.btn-follow-location {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background-color: var(--background) !important;
+    cursor: pointer;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.65);
+    transition: all 0.2s ease-in-out;
+    border-radius: 4px;
+    text-decoration: none !important;
+    outline: none !important;
+}
+
+.btn-follow-location .follow-location-icon {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+}
+
+.btn-follow-location.follow-location-inactive {
+    border: 1px solid #ff5521 !important;
+}
+
+.btn-follow-location.follow-location-inactive .follow-location-icon {
+    /* Orange filter matching #ff5521 */
+    filter: invert(48%) sepia(85%) saturate(2222%) hue-rotate(345deg) brightness(101%) contrast(102%);
+}
+
+.btn-follow-location.follow-location-inactive:hover {
+    background-color: rgba(255, 85, 33, 0.15) !important;
+}
+
+.btn-follow-location.follow-location-active {
+    border: 1px solid #2d4fad !important;
+    background-color: rgba(45, 79, 173, 0.25) !important;
+}
+
+.btn-follow-location.follow-location-active .follow-location-icon {
+    /* Blue filter matching #2d4fad / #0d6efd */
+    filter: invert(32%) sepia(98%) saturate(2132%) hue-rotate(205deg) brightness(102%) contrast(105%);
+}
+
+.btn-follow-location.follow-location-active:hover {
+    background-color: rgba(45, 79, 173, 0.4) !important;
+}
+
+/* Fullscreen Button Icon in Toolbar */
+.livemap-fullscreen-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    object-fit: contain;
+    filter: invert(48%) sepia(85%) saturate(2222%) hue-rotate(345deg) brightness(101%) contrast(102%);
+    transition: filter 0.2s;
+}
+
+.btn-warning .livemap-fullscreen-icon,
+.btn-outline-warning:hover .livemap-fullscreen-icon {
+    filter: brightness(0) saturate(100%);
 }
 
 /* Close Button Override */
@@ -477,6 +564,46 @@ img.dark-tile,
 
 .livemap-status-bar:hover {
     border-color: var(--highlight) !important;
+}
+
+.livemap-status-info-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    cursor: pointer;
+    border: 1px solid var(--front) !important;
+    border-radius: 4px;
+    background-color: var(--background) !important;
+    user-select: none;
+    transition: background-color 0.2s, border-color 0.2s;
+    outline: none !important;
+}
+
+.livemap-status-info-btn:hover,
+.livemap-status-info-btn.active {
+    background-color: var(--highlight) !important;
+    border-color: var(--highlight) !important;
+}
+
+.livemap-status-info-btn .livemap-status-info-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    object-fit: contain;
+    filter: invert(48%) sepia(85%) saturate(2222%) hue-rotate(345deg) brightness(101%) contrast(102%);
+    transition: filter 0.2s;
+}
+
+.livemap-status-info-btn:hover .livemap-status-info-icon,
+.livemap-status-info-btn.active .livemap-status-info-icon {
+    filter: invert(100%) sepia(0%) saturate(0%) brightness(200%);
+}
+
+.livemap-status-bar-mobile {
+    max-width: calc(100vw - 7rem);
+    animation: fadeIn 0.2s ease-in-out;
 }
 
 .livemap-banner-place {
