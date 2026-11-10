@@ -32,15 +32,18 @@ window.liveMap = {
         var lng = initialLng !== undefined && initialLng !== null ? initialLng : 14.5;
         var zoom = initialZoom !== undefined && initialZoom !== null ? initialZoom : 6;
 
-        var map = L.map(elementId).setView([lat, lng], zoom);
+        // Allow deeper zoom than tile providers natively support (tiles get upscaled via maxNativeZoom)
+        var map = L.map(elementId, { maxZoom: 22 }).setView([lat, lng], Math.min(zoom, 22));
 
         var openTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            maxZoom: 27,
+            maxNativeZoom: 17,
+            maxZoom: 22,
             attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
         });
 
         var darkOpenTopoMap = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            maxZoom: 27,
+            maxNativeZoom: 17,
+            maxZoom: 22,
             attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
             className: 'dark-tiles'
         });
@@ -52,12 +55,14 @@ window.liveMap = {
         });
 
         var openStreetMap = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 29,
+            maxNativeZoom: 19,
+            maxZoom: 22,
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         });
 
         var esriWorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 29,
+            maxNativeZoom: 19,
+            maxZoom: 22,
             attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
         });
         
